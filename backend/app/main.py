@@ -24,6 +24,10 @@ class FeedIn(BaseModel):
     product: str
     db_type: str
     tags: list[str] = []
+class BulkFeedIn(BaseModel):
+    feeds: list[FeedIn] = Field(default_factory=list)
+
+
     website_url: str = ""
     description: str = ""
     enabled: bool = True
@@ -184,6 +188,25 @@ def get_feed(feed_id: int):
     if not feed:
         raise HTTPException(404, "订阅源不存在")
     return feed_row(feed)
+
+
+@app.post("/api/feeds/bulk")
+def bulk_create_feeds(payload: BulkFeedIn):
+    if not payload.feeds:
+        raise HTTPException(400, "请至少导入一条订阅")
+    created, skipped = [], []
+    with db() as conn:
+        for item in payload.feeds:
+            exists = one(conn.execute("SELECT id FROM feeds WHERE rss_url=?", (item.rss_url,)))
+            if exists:
+                skipped.append({"rss_url": item.rss_url, "reason": "RSS URL 已存在"})
+                continue
+            cur = conn.execute(
+                "INSERT INTO feeds(name,rss_url,vendor,product,db_type,tags,description,enabled,status) VALUES (?,?,?,?,?,?,?,?,?)",
+                (item.name, item.rss_url, item.vendor, item.product, item.db_type, ",".join(item.tags), item.description, int(item.enabled), "normal" if item.enabled else "disabled"),
+            )
+            created.append({"id": cur.lastrowid, "name": item.name, "rss_url": item.rss_url})
+    return {"created": created, "skipped": skipped, "total": len(payload.feeds)}
 
 
 @app.put("/api/feeds/{feed_id}")

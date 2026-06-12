@@ -6,6 +6,7 @@ import EntryTable from '../components/EntryTable';
 import { PageTitle } from '../components/Layout';
 import StatusPill from '../components/StatusPill';
 import { formatDateTime, unique } from '../utils/format';
+import { viewLabel } from '../utils/view';
 
 export default function GroupDetailPage({ groupId, setPage }) {
   const [group, setGroup] = useState(null);
@@ -21,9 +22,8 @@ export default function GroupDetailPage({ groupId, setPage }) {
     if (!groupId) return;
     const [groupData, entryData, sourceData, calendarData] = await Promise.all([
       api.get(`/groups/${groupId}`),
-      api.get(`/groups/${groupId}/entries`, filters),
-      api.get(`/groups/${groupId}/entries-by-source`),
-      api.get(`/groups/${groupId}/calendar`),
+        <div className="detail-columns"><dl><dt>包含订阅数</dt><dd>{group.feeds.length}</dd><dt>默认视图</dt><dd>{viewLabel(group.default_view)}</dd><dt>当前状态</dt><dd><StatusPill status="normal" enabled={group.enabled} /></dd></dl><dl><dt>关联标签</dt><dd><TagList tags={group.tags} /></dd><dt>来源厂商</dt><dd>{vendors.join('、') || '-'}</dd><dt>最近更新时间</dt><dd>{formatDateTime(entries.items[0]?.published_at)}</dd></dl></div>
+        {view === 'calendar' && <div className="calendar-layout"><CalendarGrid days={calendar} month={month} onMonthChange={setMonth} onDayClick={setDayItems} />{dayItems && <DayEntriesPanel dayItems={dayItems} onClose={() => setDayItems(null)} />}</div>}
     ]);
     setGroup(groupData); setEntries(entryData); setBySource(sourceData); setCalendar(calendarData);
   }

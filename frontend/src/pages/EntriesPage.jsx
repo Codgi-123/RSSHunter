@@ -2,6 +2,7 @@ import { CalendarDays, List, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import CalendarGrid from '../components/CalendarGrid';
+import DateRangeFilter from '../components/DateRangeFilter';
 import EntryTable from '../components/EntryTable';
 import { PageTitle } from '../components/Layout';
 import Modal from '../components/Modal';
@@ -16,11 +17,10 @@ export default function EntriesPage({ feeds, groups, initialKeyword = '' }) {
   const [detail, setDetail] = useState(null);
   const [dayItems, setDayItems] = useState(null);
 
-  useEffect(() => { if (initialKeyword && initialKeyword !== filters.keyword) setFilters((current) => ({ ...current, keyword: initialKeyword })); }, [initialKeyword]);
+    setFilters((current) => (typeof key === 'object' ? { ...current, ...key } : { ...current, [key]: value }));
 
-  useEffect(() => {
-    const handle = setTimeout(async () => {
-      const [entryData, calendarData] = await Promise.all([api.get('/entries', filters), api.get('/calendar', filters)]);
+        <div className="filter-bar"><DateRangeFilter start={filters.start} end={filters.end} onChange={update} /><select value={filters.vendor} onChange={(event) => update('vendor', event.target.value)}><option value="">厂商</option>{vendors.map((item) => <option key={item}>{item}</option>)}</select><select value={filters.product} onChange={(event) => update('product', event.target.value)}><option value="">产品</option>{products.map((item) => <option key={item}>{item}</option>)}</select><select value={filters.db_type} onChange={(event) => update('db_type', event.target.value)}><option value="">数据库类型</option>{dbTypes.map((item) => <option key={item}>{item}</option>)}</select><select value={filters.feed_id} onChange={(event) => update('feed_id', event.target.value)}><option value="">订阅源</option>{feeds.map((feed) => <option key={feed.id} value={feed.id}>{feed.name}</option>)}</select><select value={filters.group_id} onChange={(event) => update('group_id', event.target.value)}><option value="">订阅组</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></div>
+        {view === 'list' ? <><EntryTable entries={entries.items} onDetail={setDetail} /><Pagination total={entries.total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} /></> : <div className="calendar-layout"><CalendarGrid days={calendar} month={month} onMonthChange={setMonth} onDayClick={setDayItems} />{dayItems && <DayEntriesPanel dayItems={dayItems} onClose={() => setDayItems(null)} onDetail={setDetail} />}</div>}
       setEntries(entryData); setCalendar(calendarData);
     }, 180);
     return () => clearTimeout(handle);

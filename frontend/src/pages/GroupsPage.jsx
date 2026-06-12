@@ -44,7 +44,7 @@ export default function GroupsPage({ groups, feeds, reloadGroups, setPage, setSe
             <StatusPill status="normal" enabled={group.enabled} />
             <div className="card-actions"><button onClick={() => { setSelectedGroup(group.id); setPage('group-detail'); }}>查看详情</button><button onClick={() => hydrateAndEdit(group)}><Edit3 size={15} />编辑</button><button className="danger-link" onClick={() => deleteGroup(group)}>删除</button></div>
           </article>
-        ))}
+            <button className="card-title-link" onClick={() => { setSelectedGroup(group.id); setPage('group-detail'); }}>{group.name}</button><p>{group.description || '暂无描述'}</p>
       </section>
       {visibleGroups.length > 0 && <section className="panel timeline-preview"><div className="panel-header"><h2>推荐查看路径</h2><CalendarDays size={22} /></div><ol><li>先在订阅组列表选择主题集合。</li><li>进入订阅组详情后在聚合列表、按源分组、日历视图之间切换。</li><li>筛选厂商、产品或关键词后可直接打开原文公告。</li></ol></section>}
       {editing !== undefined && <GroupModal form={form} setForm={setForm} feeds={feeds} title={editing ? '编辑订阅组' : '新增订阅组'} onClose={() => setEditing(undefined)} onSubmit={submitGroup} />}
