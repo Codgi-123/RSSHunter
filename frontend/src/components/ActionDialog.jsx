@@ -15,6 +15,7 @@ function getPosition(button) {
 export default function ActionDialog({ title = '更多操作', actions = [] }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState(null);
+  const [runningLabel, setRunningLabel] = useState('');
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
 
@@ -59,9 +60,14 @@ export default function ActionDialog({ title = '更多操作', actions = [] }) {
   }, [open, position]);
 
   async function run(action) {
-    if (action.disabled) return;
-    await action.onClick?.();
-    setOpen(false);
+    if (action.disabled || runningLabel) return;
+    setRunningLabel(action.label);
+    try {
+      await action.onClick?.();
+      setOpen(false);
+    } finally {
+      setRunningLabel('');
+    }
   }
 
   const menu = open && position && createPortal(
@@ -69,9 +75,9 @@ export default function ActionDialog({ title = '更多操作', actions = [] }) {
       <div className="action-popover-title">{title}</div>
       <div className="action-dialog-list">
         {actions.map((action) => (
-          <button key={action.label} type="button" className={`action-dialog-item ${action.danger ? 'danger' : ''} ${action.primary ? 'primary' : ''}`} onClick={() => run(action)} disabled={action.disabled}>
+          <button key={action.label} type="button" className={`action-dialog-item ${action.danger ? 'danger' : ''} ${action.primary ? 'primary' : ''}`} onClick={() => run(action)} disabled={action.disabled || Boolean(runningLabel)}>
             {action.icon}
-            <span>{action.label}</span>
+            <span>{runningLabel === action.label ? '处理中...' : action.label}</span>
             {action.description && <small>{action.description}</small>}
           </button>
         ))}
@@ -82,7 +88,7 @@ export default function ActionDialog({ title = '更多操作', actions = [] }) {
 
   return (
     <>
-      <button ref={buttonRef} className="action-more-button" type="button" onClick={() => setOpen((value) => !value)} title="更多操作" aria-label="更多操作" aria-expanded={open}><MoreHorizontal size={18} /></button>
+      <button ref={buttonRef} className="action-more-button" type="button" onClick={() => setOpen((value) => !value)} title="更多操作" aria-label="更多操作" aria-haspopup="menu" aria-expanded={open}><MoreHorizontal size={18} /></button>
       {menu}
     </>
   );

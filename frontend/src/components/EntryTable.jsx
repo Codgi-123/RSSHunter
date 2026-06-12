@@ -28,7 +28,7 @@ export default function EntryTable({ entries = [], compact = false, onDetail }) 
               <td>{formatDateTime(entry.published_at)}</td>
               <td className="summary-cell">{entry.summary || '-'}</td>
               <td>{entry.link ? <a href={entry.link} target="_blank" rel="noreferrer">查看原文 <ExternalLink size={14} /></a> : '-'}</td>
-              <td><button className="outline-mini" onClick={() => onDetail?.(entry)}>详情</button></td>
+              <td><button className="outline-mini" onClick={() => onDetail?.(entry)} disabled={!onDetail}>详情</button></td>
             </tr>
           ))}
           {!entries.length && <tr><td colSpan={compact ? 6 : 8} className="empty-cell">暂无动态条目</td></tr>}

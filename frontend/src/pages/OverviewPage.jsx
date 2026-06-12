@@ -20,12 +20,13 @@ function normalizeTrend(rows = []) {
   });
 }
 
-export default function OverviewPage({ overview, setPage, setSelectedFeed, setSelectedGroup }) {
+export default function OverviewPage({ overview, reloadOverview, setPage, setSelectedFeed, setSelectedGroup }) {
   const [recentPage, setRecentPage] = useState(1);
   const [recentPageSize, setRecentPageSize] = useState(5);
   const [abnormalPage, setAbnormalPage] = useState(1);
   const [abnormalPageSize, setAbnormalPageSize] = useState(5);
   const [busyFeedId, setBusyFeedId] = useState(null);
+  const [message, setMessage] = useState('');
   const trend = normalizeTrend(overview.trend);
   const stats = overview.stats || {};
   const recentFeeds = overview.recent_feeds || [];
@@ -45,8 +46,13 @@ export default function OverviewPage({ overview, setPage, setSelectedFeed, setSe
 
   async function retryFeed(feed) {
     setBusyFeedId(feed.id);
+    setMessage('');
     try {
       await api.post(`/feeds/${feed.id}/refresh`, {});
+      await reloadOverview?.();
+      setMessage(`订阅「${feed.name}」已重试`);
+    } catch (err) {
+      setMessage(err.message);
     } finally {
       setBusyFeedId(null);
     }
@@ -55,16 +61,17 @@ export default function OverviewPage({ overview, setPage, setSelectedFeed, setSe
   return (
     <>
       <PageTitle title="首页概览" subtitle="快速查看 RSS 平台整体状态、最新动态与异常订阅源" />
+      {message && <div className="inline-status"><span>{message}</span><button onClick={() => setMessage('')}>关闭</button></div>}
       <section className="metric-grid">
-        <MetricCard icon={FileText} label="今日新增动态" value={stats.today_entries ?? 0} delta="较昨日 +18.7% ↑" hint="今日新增的动态条目总数" />
-        <MetricCard icon={Rss} label="订阅源总数" value={stats.feed_count ?? 0} tone="green" delta="较昨日 +3 ↑" hint="当前已配置的 RSS 订阅源总数" />
-        <MetricCard icon={Users} label="订阅组总数" value={stats.group_count ?? 0} tone="purple" delta="较昨日 +1 ↑" hint="当前已创建的订阅组总数" />
-        <MetricCard icon={AlertTriangle} label="异常订阅源" value={stats.abnormal_count ?? 0} tone="red" delta="较昨日 -2 ↓" hint="当前存在异常的订阅源数量" />
+        <MetricCard icon={FileText} label="今日新增动态" value={stats.today_entries ?? 0} delta="较昨日 +18.7% ↑" hint="今日新增的动态条目总数" onClick={() => setPage('entries')} />
+        <MetricCard icon={Rss} label="订阅源总数" value={stats.feed_count ?? 0} tone="green" delta="较昨日 +3 ↑" hint="当前已配置的 RSS 订阅源总数" onClick={() => setPage('feeds')} />
+        <MetricCard icon={Users} label="订阅组总数" value={stats.group_count ?? 0} tone="purple" delta="较昨日 +1 ↑" hint="当前已创建的订阅组总数" onClick={() => setPage('groups')} />
+        <MetricCard icon={AlertTriangle} label="异常订阅源" value={stats.abnormal_count ?? 0} tone="red" delta="较昨日 -2 ↓" hint="当前存在异常的订阅源数量" onClick={() => setPage('status')} />
       </section>
 
       <section className="content-split">
         <div className="panel trend-panel">
-          <div className="panel-header"><h2>最近 7 天动态趋势</h2><button>近 7 天⌄</button></div>
+          <div className="panel-header"><h2>最近 7 天动态趋势</h2><span className="status-pill status-muted">近 7 天</span></div>
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={trend} margin={{ top: 16, right: 24, left: 0, bottom: 0 }}>
               <defs><linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#1b63f4" stopOpacity={0.25} /><stop offset="95%" stopColor="#1b63f4" stopOpacity={0} /></linearGradient></defs>

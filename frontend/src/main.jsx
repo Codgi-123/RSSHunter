@@ -22,12 +22,35 @@ function App() {
   const [selectedFeed, setSelectedFeed] = useState(null);
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [error, setError] = useState('');
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadOverview = useCallback(() => api.get('/overview').then(setOverview).catch((err) => setError(err.message)), []);
-  const loadFeeds = useCallback(() => api.get('/feeds').then(setFeeds).catch((err) => setError(err.message)), []);
-  const loadGroups = useCallback(() => api.get('/groups').then(setGroups).catch((err) => setError(err.message)), []);
-  const loadLogs = useCallback(() => api.get('/fetch-logs').then(setLogs).catch((err) => setError(err.message)), []);
-  const loadAll = useCallback(() => Promise.all([loadOverview(), loadFeeds(), loadGroups(), loadLogs()]), [loadOverview, loadFeeds, loadGroups, loadLogs]);
+  const loadOverview = useCallback(async () => {
+    try { setOverview(await api.get('/overview', undefined, { cache: false })); }
+    catch (err) { setError(err.message); }
+  }, []);
+  const loadFeeds = useCallback(async () => {
+    try { setFeeds(await api.get('/feeds', undefined, { cache: false })); }
+    catch (err) { setError(err.message); }
+  }, []);
+  const loadGroups = useCallback(async () => {
+    try { setGroups(await api.get('/groups', undefined, { cache: false })); }
+    catch (err) { setError(err.message); }
+  }, []);
+  const loadLogs = useCallback(async () => {
+    try { setLogs(await api.get('/fetch-logs', undefined, { cache: false })); }
+    catch (err) { setError(err.message); }
+  }, []);
+  const loadAll = useCallback(async () => {
+    setRefreshing(true);
+    setError('');
+    try {
+      await Promise.allSettled([loadOverview(), loadFeeds(), loadGroups(), loadLogs()]);
+    } finally {
+      setRefreshing(false);
+      setInitialLoading(false);
+    }
+  }, [loadOverview, loadFeeds, loadGroups, loadLogs]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
   useEffect(() => {
@@ -43,13 +66,14 @@ function App() {
     if (page === 'entries') return <EntriesPage feeds={feeds} groups={groups} initialKeyword={globalKeyword} />;
     if (page === 'status') return <StatusPage feeds={feeds} logs={logs} reloadFeeds={loadFeeds} reloadLogs={loadLogs} />;
     if (page === 'docs') return <DocsPage />;
-    return <OverviewPage overview={overview} setPage={setPage} setSelectedFeed={setSelectedFeed} setSelectedGroup={setSelectedGroup} />;
-  }, [page, feeds, groups, logs, overview, selectedFeed, selectedGroup, globalKeyword, loadFeeds, loadGroups, loadLogs]);
+    return <OverviewPage overview={overview} reloadOverview={loadOverview} setPage={setPage} setSelectedFeed={setSelectedFeed} setSelectedGroup={setSelectedGroup} />;
+  }, [page, feeds, groups, logs, overview, selectedFeed, selectedGroup, globalKeyword, loadOverview, loadFeeds, loadGroups, loadLogs]);
 
   return (
     <Layout page={page} setPage={setPage} globalKeyword={globalKeyword} setGlobalKeyword={setGlobalKeyword}>
-      {error && <div className="error-banner">{error}<button onClick={() => setError('')}>关闭</button></div>}
-      {content}
+      {error && <div className="error-banner"><span>{error}</span><div><button onClick={loadAll} disabled={refreshing}>重试</button><button onClick={() => setError('')}>关闭</button></div></div>}
+      {refreshing && !initialLoading && <div className="inline-loading">正在同步最新数据...</div>}
+      {initialLoading ? <section className="panel state-panel">正在加载平台数据...</section> : content}
     </Layout>
   );
 }

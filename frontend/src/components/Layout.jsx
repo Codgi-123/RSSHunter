@@ -1,4 +1,4 @@
-import { BookOpen, ChevronLeft, ChevronRight, Database, FileText, Home, List, Menu, Search, ShieldCheck, Users } from 'lucide-react';
+import { BookOpen, ChevronLeft, ChevronRight, Database, FileText, Home, List, Menu, Search, ShieldCheck, Users, X } from 'lucide-react';
 import { useState } from 'react';
 
 const nav = [
@@ -38,6 +38,7 @@ export default function Layout({ page, setPage, globalKeyword, setGlobalKeyword,
         <header className="topbar">
           <label className="top-search">
             <input value={globalKeyword} onChange={(event) => setGlobalKeyword(event.target.value)} placeholder="搜索订阅源、订阅组或动态..." />
+            {globalKeyword && <button type="button" className="search-clear-button" onClick={() => setGlobalKeyword('')} aria-label="清空搜索"><X size={16} /></button>}
             <Search size={20} />
           </label>
         </header>

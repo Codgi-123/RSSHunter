@@ -31,8 +31,8 @@ export default function Pagination({ total = 0, page = 1, pageSize = 10, onPageC
     onPageChange(clamp(nextPage, 1, totalPages));
   }
 
-  function submitJump() {
-    const nextPage = Number(jumpPage);
+function submitJump() {
+    const nextPage = Number.parseInt(jumpPage, 10);
     if (Number.isFinite(nextPage)) go(nextPage);
     else setJumpPage(String(page));
   }
@@ -44,10 +44,10 @@ export default function Pagination({ total = 0, page = 1, pageSize = 10, onPageC
         <select className="pagination-select" value={pageSize} onChange={(event) => onPageSizeChange(Number(event.target.value))}>
           {pageSizes.map((size) => <option key={size} value={size}>{size} 条/页</option>)}
         </select>
-        <button className="page-button icon-page" onClick={() => go(page - 1)} disabled={page <= 1}><ChevronLeft size={16} /></button>
-        {pages.map((item) => <button key={item} className={`page-button ${item === page ? 'active' : ''}`} onClick={() => go(item)}>{item}</button>)}
-        <button className="page-button icon-page" onClick={() => go(page + 1)} disabled={page >= totalPages}><ChevronRight size={16} /></button>
-        <label className="page-jump">前往<input value={jumpPage} inputMode="numeric" onChange={(event) => setJumpPage(event.target.value)} onBlur={submitJump} onKeyDown={(event) => { if (event.key === 'Enter') submitJump(); }} />页</label>
+        <button className="page-button icon-page" aria-label="上一页" onClick={() => go(page - 1)} disabled={page <= 1}><ChevronLeft size={16} /></button>
+        {pages.map((item) => <button key={item} className={`page-button ${item === page ? 'active' : ''}`} aria-current={item === page ? 'page' : undefined} onClick={() => go(item)}>{item}</button>)}
+        <button className="page-button icon-page" aria-label="下一页" onClick={() => go(page + 1)} disabled={page >= totalPages}><ChevronRight size={16} /></button>
+        <label className="page-jump">前往<input value={jumpPage} inputMode="numeric" aria-label="跳转页码" onChange={(event) => setJumpPage(event.target.value.replace(/\D/g, ''))} onBlur={submitJump} onKeyDown={(event) => { if (event.key === 'Enter') submitJump(); }} />页</label>
       </div>
     </div>
   );

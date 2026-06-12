@@ -1,7 +1,8 @@
-import { ArrowLeft, CalendarDays, Database, Edit3, Grid2X2, List, Search, Users } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Database, Grid2X2, List, Search, Users } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import CalendarGrid from '../components/CalendarGrid';
+import EntryDetailModal from '../components/EntryDetailModal';
 import EntryTable from '../components/EntryTable';
 import { PageTitle } from '../components/Layout';
 import Pagination, { getPageItems } from '../components/Pagination';
@@ -18,9 +19,13 @@ export default function GroupDetailPage({ groupId, setPage }) {
   const [view, setView] = useState('aggregate');
   const [filters, setFilters] = useState({ keyword: '', vendor: '', product: '' });
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [detail, setDetail] = useState(null);
   const [dayItems, setDayItems] = useState(null);
   const [page, setLocalPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
 
   async function loadGroup() {
     if (!groupId) return;
@@ -40,13 +45,53 @@ export default function GroupDetailPage({ groupId, setPage }) {
 
   async function loadCalendar() {
     if (!groupId || view !== 'calendar') return;
-    setCalendar(await api.get(`/groups/${groupId}/calendar`, { month }));
+    setCalendar(await api.get('/calendar', { ...filters, group_id: groupId, month }));
   }
 
-  useEffect(() => { loadGroup(); }, [groupId]);
-  useEffect(() => { loadEntries(); }, [groupId, filters.keyword, filters.vendor, filters.product, page, pageSize]);
-  useEffect(() => { loadSource(); }, [groupId, view]);
-  useEffect(() => { loadCalendar(); }, [groupId, view, month]);
+  async function reloadAll() {
+    setRefreshing(true);
+    setError('');
+    try {
+      await Promise.all([loadGroup(), loadEntries(), loadSource(), loadCalendar()]);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRefreshing(false);
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError('');
+    if (!groupId) {
+      setGroup(null);
+      setLoading(false);
+      return () => { active = false; };
+    }
+    api.get(`/groups/${groupId}`, undefined, { cache: false }).then((data) => { if (active) setGroup(data); }).catch((err) => { if (active) setError(err.message); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [groupId]);
+  useEffect(() => {
+    if (!groupId) return undefined;
+    let active = true;
+    const params = { ...filters, limit: pageSize, offset: (page - 1) * pageSize };
+    api.get(`/groups/${groupId}/entries`, params, { cache: false }).then((data) => { if (active) setEntries(data); }).catch((err) => { if (active) setError(err.message); });
+    return () => { active = false; };
+  }, [groupId, filters.keyword, filters.vendor, filters.product, page, pageSize]);
+  useEffect(() => {
+    if (!groupId || view !== 'source') return undefined;
+    let active = true;
+    api.get(`/groups/${groupId}/entries-by-source`, undefined, { cache: false }).then((data) => { if (active) setBySource(data); }).catch((err) => { if (active) setError(err.message); });
+    return () => { active = false; };
+  }, [groupId, view]);
+  useEffect(() => {
+    if (!groupId || view !== 'calendar') return undefined;
+    let active = true;
+    api.get('/calendar', { ...filters, group_id: groupId, month }, { cache: false }).then((data) => { if (active) setCalendar(data); }).catch((err) => { if (active) setError(err.message); });
+    return () => { active = false; };
+  }, [groupId, filters.keyword, filters.vendor, filters.product, view, month]);
 
   const vendors = useMemo(() => unique(group?.feeds || [], 'vendor'), [group]);
   const products = useMemo(() => unique(group?.feeds || [], 'product'), [group]);
@@ -56,10 +101,12 @@ export default function GroupDetailPage({ groupId, setPage }) {
     setFilters({ ...filters, [key]: value });
   };
 
-  if (!group) return <PageTitle title="订阅组详情" subtitle="正在加载订阅组信息..." />;
+  if (loading) return <><PageTitle title="订阅组详情" subtitle="正在加载订阅组信息..." /><section className="panel state-panel">正在加载订阅组...</section></>;
+  if (!group) return <><PageTitle title="订阅组详情" subtitle="无法加载订阅组信息" actions={<button onClick={reloadAll}><Database size={17} />重试</button>} />{error && <div className="form-error">{error}</div>}</>;
   return (
     <>
-      <PageTitle title="订阅组详情" subtitle="查看订阅组内聚合动态，支持聚合列表、按源分组与日历切换" actions={<><button onClick={() => setPage('groups')}><ArrowLeft size={18} />返回列表</button><button><Edit3 size={17} />编辑订阅组</button><button className="primary-button"><Database size={18} />管理订阅源</button></>} />
+      <PageTitle title="订阅组详情" subtitle="查看订阅组内聚合动态，支持聚合列表、按源分组与日历切换" actions={<><button onClick={() => setPage('groups')}><ArrowLeft size={18} />返回列表</button><button onClick={() => setPage('groups')}>去管理页编辑</button><button className="primary-button" onClick={() => setPage('feeds')}><Database size={18} />管理订阅源</button><button onClick={reloadAll} disabled={refreshing}>{refreshing ? '刷新中' : '刷新'}</button></>} />
+      {error && <div className="form-error">{error}</div>}
       <section className="detail-hero group-hero">
         <div className="hero-title"><div className="big-icon"><Users size={36} /></div><div><h2>{group.name}</h2><p>{group.description}</p></div></div>
         <div className="group-stat-rail"><article><List /><span>今日新增</span><b>{entries.items.filter((item) => item.created_at?.slice(0, 10) === new Date().toISOString().slice(0, 10)).length}</b></article><article><CalendarDays /><span>最近7天新增</span><b>{entries.total}</b></article><article><Grid2X2 /><span>订阅源数量</span><b>{group.feeds.length}</b></article></div>
@@ -67,10 +114,11 @@ export default function GroupDetailPage({ groupId, setPage }) {
       </section>
       <section className="panel">
         <div className="tabs"><button className={view === 'aggregate' ? 'active' : ''} onClick={() => setView('aggregate')}><List size={16} />聚合列表</button><button className={view === 'source' ? 'active' : ''} onClick={() => setView('source')}>按源分组</button><button className={view === 'calendar' ? 'active' : ''} onClick={() => setView('calendar')}>日历视图</button><label><input value={filters.keyword} onChange={(event) => updateFilter('keyword', event.target.value)} placeholder="搜索标题、摘要或来源订阅源" /><Search size={16} /></label><select value={filters.vendor} onChange={(event) => updateFilter('vendor', event.target.value)}><option value="">厂商</option>{vendors.map((item) => <option key={item}>{item}</option>)}</select><select value={filters.product} onChange={(event) => updateFilter('product', event.target.value)}><option value="">产品</option>{products.map((item) => <option key={item}>{item}</option>)}</select></div>
-        {view === 'aggregate' && <><EntryTable entries={entries.items} /><Pagination total={entries.total} page={page} pageSize={pageSize} onPageChange={setLocalPage} onPageSizeChange={(size) => { setPageSize(size); setLocalPage(1); }} /></>}
+        {view === 'aggregate' && <><EntryTable entries={entries.items} onDetail={setDetail} /><Pagination total={entries.total} page={page} pageSize={pageSize} onPageChange={setLocalPage} onPageSizeChange={(size) => { setPageSize(size); setLocalPage(1); }} /></>}
         {view === 'source' && <SourceGroupedList groups={sourceGroups} />}
-        {view === 'calendar' && <div className="calendar-layout"><CalendarGrid days={calendar} month={month} onMonthChange={(value) => { setDayItems(null); setMonth(value); }} onDayClick={setDayItems} />{dayItems && <DayEntriesPanel dayItems={dayItems} onClose={() => setDayItems(null)} />}</div>}
+        {view === 'calendar' && <div className="calendar-layout"><CalendarGrid days={calendar} month={month} onMonthChange={(value) => { setDayItems(null); setMonth(value); }} onDayClick={setDayItems} />{dayItems && <DayEntriesPanel dayItems={dayItems} onClose={() => setDayItems(null)} onDetail={setDetail} />}</div>}
       </section>
+      <EntryDetailModal entry={detail} onClose={() => setDetail(null)} />
     </>
   );
 }
@@ -79,7 +127,7 @@ function SourceGroupedList({ groups }) {
   return <div className="source-group-list">{groups.map((group) => <article key={group.feed_id} className="source-group"><header><div><h3>{group.feed_name}</h3><p>{group.vendor} / {group.product}</p></div><b>{group.entries.length} 条</b><span>最近更新：{formatDateTime(group.entries[0]?.published_at)}</span></header><ul>{group.entries.map((entry) => <li key={entry.id}><time>{formatDateTime(entry.published_at).slice(0, 10)}</time><a href={entry.link} target="_blank" rel="noreferrer">{entry.title}</a><small>{entry.summary}</small></li>)}</ul></article>)}{!groups.length && <p className="empty-cell">暂无匹配的分组动态</p>}</div>;
 }
 
-function DayEntriesPanel({ dayItems, onClose }) {
+function DayEntriesPanel({ dayItems, onClose, onDetail }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const items = dayItems.items || [];
@@ -87,7 +135,7 @@ function DayEntriesPanel({ dayItems, onClose }) {
   return (
     <section className="panel day-drawer">
       <div className="panel-header"><h2>{dayItems.date} 动态</h2><button onClick={onClose}>关闭</button></div>
-      <EntryTable entries={pagedItems} compact />
+      <EntryTable entries={pagedItems} compact onDetail={onDetail} />
       <Pagination total={items.length} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
     </section>
   );
