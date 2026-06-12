@@ -1,6 +1,8 @@
-import { AlertTriangle, FileText, Rss, TrendingUp, Users } from 'lucide-react';
+import { AlertTriangle, FileText, Rss, Users } from 'lucide-react';
+import { useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import MetricCard from '../components/MetricCard';
+import Pagination, { getPageItems } from '../components/Pagination';
 import StatusPill from '../components/StatusPill';
 import { PageTitle } from '../components/Layout';
 import { formatDateTime } from '../utils/format';
@@ -16,8 +18,17 @@ function normalizeTrend(rows = []) {
 }
 
 export default function OverviewPage({ overview, setPage, setSelectedGroup }) {
+  const [recentPage, setRecentPage] = useState(1);
+  const [recentPageSize, setRecentPageSize] = useState(5);
+  const [abnormalPage, setAbnormalPage] = useState(1);
+  const [abnormalPageSize, setAbnormalPageSize] = useState(5);
   const trend = normalizeTrend(overview.trend);
   const stats = overview.stats || {};
+  const recentFeeds = overview.recent_feeds || [];
+  const abnormalFeeds = overview.abnormal_feeds || [];
+  const pagedRecentFeeds = getPageItems(recentFeeds, recentPage, recentPageSize);
+  const pagedAbnormalFeeds = getPageItems(abnormalFeeds, abnormalPage, abnormalPageSize);
+
   return (
     <>
       <PageTitle title="首页概览" subtitle="快速查看 RSS 平台整体状态、最新动态与异常订阅源" />
@@ -44,7 +55,11 @@ export default function OverviewPage({ overview, setPage, setSelectedGroup }) {
         </div>
         <div className="panel">
           <div className="panel-header"><h2>最近更新订阅源</h2><button className="link-button" onClick={() => setPage('feeds')}>查看更多</button></div>
-          <table className="data-table compact-table"><thead><tr><th>订阅源名称</th><th>最近更新时间</th><th>今日新增</th></tr></thead><tbody>{(overview.recent_feeds || []).map((feed) => <tr key={feed.id}><td><Rss size={15} />{feed.name}</td><td>{formatDateTime(feed.latest_item_published_at)}</td><td className="number-link">{feed.today_new || 0}</td></tr>)}</tbody></table>
+          <table className="data-table compact-table">
+            <thead><tr><th>订阅源名称</th><th>最近更新时间</th><th>今日新增</th></tr></thead>
+            <tbody>{pagedRecentFeeds.map((feed) => <tr key={feed.id}><td><span className="cell-with-icon"><Rss size={15} />{feed.name}</span></td><td>{formatDateTime(feed.latest_item_published_at)}</td><td className="number-link">{feed.today_new || 0}</td></tr>)}{!recentFeeds.length && <tr><td colSpan="3" className="empty-cell">暂无最近更新订阅源</td></tr>}</tbody>
+          </table>
+          <Pagination total={recentFeeds.length} page={recentPage} pageSize={recentPageSize} onPageChange={setRecentPage} onPageSizeChange={(size) => { setRecentPageSize(size); setRecentPage(1); }} />
         </div>
       </section>
 
@@ -66,7 +81,11 @@ export default function OverviewPage({ overview, setPage, setSelectedGroup }) {
 
       <section className="panel">
         <div className="panel-header"><h2>异常订阅源</h2><button className="link-button" onClick={() => setPage('status')}>查看更多</button></div>
-        <table className="data-table"><thead><tr><th>订阅名称</th><th>厂商</th><th>产品</th><th>异常类型</th><th>最近抓取时间</th><th>操作</th></tr></thead><tbody>{(overview.abnormal_feeds || []).map((feed) => <tr key={feed.id}><td>{feed.name}</td><td>{feed.vendor}</td><td>{feed.product}</td><td><StatusPill status={feed.status} enabled={feed.enabled} /></td><td>{formatDateTime(feed.last_fetched_at)}</td><td><button className="outline-mini">查看</button><button className="primary-mini">重试</button></td></tr>)}{!overview.abnormal_feeds?.length && <tr><td colSpan="6" className="empty-cell">暂无异常订阅源</td></tr>}</tbody></table>
+        <table className="data-table">
+          <thead><tr><th>订阅名称</th><th>厂商</th><th>产品</th><th>异常类型</th><th>最近抓取时间</th><th>操作</th></tr></thead>
+          <tbody>{pagedAbnormalFeeds.map((feed) => <tr key={feed.id}><td>{feed.name}</td><td>{feed.vendor}</td><td>{feed.product}</td><td><StatusPill status={feed.status} enabled={feed.enabled} /></td><td>{formatDateTime(feed.last_fetched_at)}</td><td><button className="outline-mini">查看</button><button className="primary-mini">重试</button></td></tr>)}{!abnormalFeeds.length && <tr><td colSpan="6" className="empty-cell">暂无异常订阅源</td></tr>}</tbody>
+        </table>
+        <Pagination total={abnormalFeeds.length} page={abnormalPage} pageSize={abnormalPageSize} onPageChange={setAbnormalPage} onPageSizeChange={(size) => { setAbnormalPageSize(size); setAbnormalPage(1); }} />
       </section>
     </>
   );

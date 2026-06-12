@@ -6,7 +6,6 @@ CREATE TABLE IF NOT EXISTS feeds (
   product TEXT NOT NULL,
   db_type TEXT NOT NULL,
   tags TEXT DEFAULT '',
-  website_url TEXT DEFAULT '',
   description TEXT DEFAULT '',
   enabled INTEGER NOT NULL DEFAULT 1,
   status TEXT NOT NULL DEFAULT 'normal',

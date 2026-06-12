@@ -13,9 +13,9 @@ export default function DocsPage() {
       <PageTitle title="API 文档" subtitle="为 OpenClaw / Codex / 其他 Agent Skill 提供结构化查询能力" />
       <section className="docs-hero"><BookOpen size={42} /><div><h2>RSSHunter API</h2><p>所有接口返回 JSON，可按关键词、厂商、产品、数据库类型、订阅源和订阅组进行查询。</p></div></section>
       <section className="api-section-grid">{sections.map(([title, endpoints]) => <article className="panel api-section" key={title}><h3>{title}</h3>{endpoints.map((endpoint) => <code key={endpoint}><Code2 size={15} />{endpoint}</code>)}</article>)}</section>
-      <section className="panel"><h2>Agent 调用示例</h2><pre>{`curl 'http://localhost:8000/api/entries?keyword=PostgreSQL&vendor=AWS'
-curl 'http://localhost:8000/api/groups/1/entries-by-source'
-curl 'http://localhost:8000/api/calendar?db_type=向量数据库'`}</pre></section>
+      <section className="panel"><h2>Agent 调用示例</h2><pre>{`curl 'http://localhost:9000/api/entries?keyword=PostgreSQL&vendor=AWS'
+curl 'http://localhost:9000/api/groups/1/entries-by-source'
+curl 'http://localhost:9000/api/calendar?db_type=向量数据库'`}</pre></section>
     </>
   );
 }

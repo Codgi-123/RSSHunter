@@ -24,7 +24,6 @@ class FeedIn(BaseModel):
     product: str
     db_type: str
     tags: list[str] = []
-    website_url: str = ""
     description: str = ""
     enabled: bool = True
 
@@ -46,9 +45,43 @@ def init_db():
     schema = Path(__file__).with_name("schema.sql").read_text()
     conn = connect()
     conn.executescript(schema)
+    migrate(conn)
     seed(conn)
+    migrate(conn)
     conn.commit()
     conn.close()
+
+
+TENCENT_VECTOR_RSS_URL = "https://rsshub.codgi.xin/tencent/cloud/document/product-updates/向量数据库"
+
+
+def table_columns(conn, table: str) -> set[str]:
+    return {row["name"] for row in rows(conn.execute(f"PRAGMA table_info({table})"))}
+
+
+def migrate(conn):
+    if "website_url" in table_columns(conn, "feeds"):
+        conn.execute("ALTER TABLE feeds DROP COLUMN website_url")
+    conn.execute(
+        """UPDATE feeds
+           SET name = ?, product = ?, db_type = ?, tags = ?, description = ?
+           WHERE rss_url = ?""",
+        ("腾讯云向量数据库动态", "向量数据库", "向量数据库", "腾讯云,向量数据库", "腾讯云向量数据库产品更新 RSS", TENCENT_VECTOR_RSS_URL),
+    )
+    vector_feed = one(conn.execute("SELECT id FROM feeds WHERE rss_url = ?", (TENCENT_VECTOR_RSS_URL,)))
+    vector_group = one(conn.execute("SELECT id FROM groups WHERE name = ?", ("向量数据库动态",)))
+    if vector_feed:
+        conn.execute("DELETE FROM entries WHERE feed_id = ? AND guid LIKE 'seed-%'", (vector_feed["id"],))
+        conn.execute(
+            "DELETE FROM group_feeds WHERE feed_id = ? AND group_id IN (SELECT id FROM groups WHERE name = ?)",
+            (vector_feed["id"], "云厂商关系型数据库"),
+        )
+    if vector_feed and vector_group:
+        conn.execute(
+            """INSERT OR IGNORE INTO group_feeds(group_id, feed_id, sort_order)
+               VALUES (?, ?, COALESCE((SELECT MAX(sort_order) + 1 FROM group_feeds WHERE group_id = ?), 0))""",
+            (vector_group["id"], vector_feed["id"], vector_group["id"]),
+        )
 
 
 def seed(conn):
@@ -56,17 +89,17 @@ def seed(conn):
     if count:
         return
     feeds = [
-        ("腾讯云 TDSQL 动态", "https://rsshub.codgi.xin/tencent/cloud/document/product-updates/向量数据库", "腾讯云", "TDSQL", "向量数据库", "腾讯云,向量数据库", "https://cloud.tencent.com/document/product", "腾讯云数据库产品更新 RSS"),
-        ("阿里云 RDS 动态", "https://rsshub.app/aliyun/news", "阿里云", "RDS", "关系型", "云厂商,关系型", "https://www.aliyun.com/product/rds", "阿里云数据库更新动态"),
-        ("PostgreSQL 官方动态", "https://www.postgresql.org/about/newsarchive/rss/", "PostgreSQL", "PostgreSQL", "关系型", "PostgreSQL,开源", "https://www.postgresql.org/", "PostgreSQL 官方新闻"),
-        ("Redis 官方更新", "https://redis.io/blog/feed/", "Redis", "Redis", "缓存", "Redis,缓存", "https://redis.io/", "Redis 官方博客"),
-        ("MongoDB 官方动态", "https://www.mongodb.com/company/blog/rss", "MongoDB", "MongoDB", "文档数据库", "MongoDB,文档", "https://www.mongodb.com/", "MongoDB 官方博客"),
-        ("AWS RDS Blog", "https://aws.amazon.com/blogs/database/category/database/amazon-rds/feed/", "AWS", "RDS", "关系型", "AWS,RDS", "https://aws.amazon.com/rds/", "AWS RDS 博客"),
+        ("腾讯云向量数据库动态", TENCENT_VECTOR_RSS_URL, "腾讯云", "向量数据库", "向量数据库", "腾讯云,向量数据库", "腾讯云向量数据库产品更新 RSS"),
+        ("阿里云 RDS 动态", "https://rsshub.app/aliyun/news", "阿里云", "RDS", "关系型", "云厂商,关系型", "阿里云数据库更新动态"),
+        ("PostgreSQL 官方动态", "https://www.postgresql.org/about/newsarchive/rss/", "PostgreSQL", "PostgreSQL", "关系型", "PostgreSQL,开源", "PostgreSQL 官方新闻"),
+        ("Redis 官方更新", "https://redis.io/blog/feed/", "Redis", "Redis", "缓存", "Redis,缓存", "Redis 官方博客"),
+        ("MongoDB 官方动态", "https://www.mongodb.com/company/blog/rss", "MongoDB", "MongoDB", "文档数据库", "MongoDB,文档", "MongoDB 官方博客"),
+        ("AWS RDS Blog", "https://aws.amazon.com/blogs/database/category/database/amazon-rds/feed/", "AWS", "RDS", "关系型", "AWS,RDS", "AWS RDS 博客"),
     ]
     for f in feeds:
-        conn.execute("INSERT INTO feeds(name, rss_url, vendor, product, db_type, tags, website_url, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", f)
+        conn.execute("INSERT INTO feeds(name, rss_url, vendor, product, db_type, tags, description) VALUES (?, ?, ?, ?, ?, ?, ?)", f)
     groups = [
-        ("云厂商关系型数据库", "聚合 AWS、阿里云、腾讯云等云厂商关系型数据库动态", "云厂商,关系型", "aggregate", 1, [1, 2, 6]),
+        ("云厂商关系型数据库", "聚合 AWS、阿里云等云厂商关系型数据库动态", "云厂商,关系型", "aggregate", 1, [2, 6]),
         ("缓存数据库动态", "Redis 与云缓存数据库更新", "Redis,缓存", "aggregate", 1, [4]),
         ("PostgreSQL 生态", "PostgreSQL 官方及云厂商兼容产品更新", "PostgreSQL,关系型", "aggregate", 1, [3, 6]),
         ("向量数据库动态", "向量数据库产品公告和云厂商更新", "向量数据库,AI", "calendar", 1, [1]),
@@ -160,8 +193,8 @@ def overview():
 def list_feeds(keyword: str = "", vendor: str = "", product: str = "", db_type: str = "", status: str = ""):
     where, params = [], []
     if keyword:
-        where.append("(name LIKE ? OR rss_url LIKE ? OR vendor LIKE ? OR product LIKE ?)"); params += [f"%{keyword}%"] * 4
-    for val, col in [(vendor, "vendor"), (product, "product"), (db_type, "db_type"), (status, "status")]:
+        where.append("(f.name LIKE ? OR f.rss_url LIKE ? OR f.vendor LIKE ? OR f.product LIKE ?)"); params += [f"%{keyword}%"] * 4
+    for val, col in [(vendor, "f.vendor"), (product, "f.product"), (db_type, "f.db_type"), (status, "f.status")]:
         if val:
             where.append(f"{col} = ?"); params.append(val)
     sql_where = " WHERE " + " AND ".join(where) if where else ""
@@ -173,7 +206,7 @@ def list_feeds(keyword: str = "", vendor: str = "", product: str = "", db_type: 
 @app.post("/api/feeds")
 def create_feed(payload: FeedIn):
     with db() as conn:
-        cur = conn.execute("INSERT INTO feeds(name,rss_url,vendor,product,db_type,tags,website_url,description,enabled,status) VALUES (?,?,?,?,?,?,?,?,?,?)", (payload.name, payload.rss_url, payload.vendor, payload.product, payload.db_type, ",".join(payload.tags), payload.website_url, payload.description, int(payload.enabled), "normal" if payload.enabled else "disabled"))
+        cur = conn.execute("INSERT INTO feeds(name,rss_url,vendor,product,db_type,tags,description,enabled,status) VALUES (?,?,?,?,?,?,?,?,?)", (payload.name, payload.rss_url, payload.vendor, payload.product, payload.db_type, ",".join(payload.tags), payload.description, int(payload.enabled), "normal" if payload.enabled else "disabled"))
         return {"id": cur.lastrowid}
 
 
@@ -189,7 +222,7 @@ def get_feed(feed_id: int):
 @app.put("/api/feeds/{feed_id}")
 def update_feed(feed_id: int, payload: FeedIn):
     with db() as conn:
-        conn.execute("UPDATE feeds SET name=?,rss_url=?,vendor=?,product=?,db_type=?,tags=?,website_url=?,description=?,enabled=?,status=?,updated_at=? WHERE id=?", (payload.name, payload.rss_url, payload.vendor, payload.product, payload.db_type, ",".join(payload.tags), payload.website_url, payload.description, int(payload.enabled), "normal" if payload.enabled else "disabled", now_iso(), feed_id))
+        conn.execute("UPDATE feeds SET name=?,rss_url=?,vendor=?,product=?,db_type=?,tags=?,description=?,enabled=?,status=?,updated_at=? WHERE id=?", (payload.name, payload.rss_url, payload.vendor, payload.product, payload.db_type, ",".join(payload.tags), payload.description, int(payload.enabled), "normal" if payload.enabled else "disabled", now_iso(), feed_id))
     return get_feed(feed_id)
 
 

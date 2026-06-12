@@ -1,3 +1,6 @@
+- 数据库使用SQLite、前后端技术栈不限、我会使用docker compose部署这个项目
+- RSS抓取调度方式参考业界的方式，我的RSS订阅链接可以参考https://rsshub.codgi.xin/tencent/cloud/document/product-updates/向量数据库。https://rsshub.codgi.xin是我自己的域名。
+- 前端页面样式在 /frontend_example 下面，有7个核心页面的图片，必须严格参考
 - 前端框架默认使用React、CSS使用TailWind、样式你需要根据 /.codex/rules/前端多样风格.rules 这个rules
 - 始终使用中文回复用户，但技术专有名词可保留英文（如 API、Python、DTO等）。
 - 使用项目既有风格，不引入新风格，包括代码、文档或交互，默认延用项目中已有的格式、缩进、命名习惯。

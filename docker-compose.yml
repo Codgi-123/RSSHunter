@@ -4,15 +4,15 @@ services:
     environment:
       RSSHUNTER_DB: /app/data/rsshunter.db
       RSSHUNTER_FETCH_INTERVAL_SECONDS: 900
-      RSSHUNTER_CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      RSSHUNTER_CORS_ORIGINS: http://localhost:4000,http://127.0.0.1:4000
     volumes:
       - rsshunter_data:/app/data
     ports:
-      - "8000:8000"
+      - "9000:9000"
   frontend:
     build: ./frontend
     ports:
-      - "3000:80"
+      - "4000:4000"
     depends_on:
       - backend
 volumes:

@@ -10,7 +10,7 @@ export function formatDate(value) {
 
 export function splitTags(value) {
   if (Array.isArray(value)) return value;
-  return String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
+  return String(value || '').split(/[,，]/).map((item) => item.trim()).filter(Boolean);
 }
 
 export function joinTags(value) {

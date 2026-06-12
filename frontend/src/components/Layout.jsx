@@ -1,4 +1,4 @@
-import { Bell, BookOpen, ChevronDown, Database, FileText, Home, List, Search, ShieldCheck, Users } from 'lucide-react';
+import { BookOpen, Database, FileText, Home, List, Search, ShieldCheck, Users } from 'lucide-react';
 
 const nav = [
   ['overview', '首页概览', Home],
@@ -29,9 +29,6 @@ export default function Layout({ page, setPage, globalKeyword, setGlobalKeyword,
             <input value={globalKeyword} onChange={(event) => setGlobalKeyword(event.target.value)} placeholder="搜索订阅源、订阅组或动态..." />
             <Search size={20} />
           </label>
-          <div className="notification"><Bell size={22} /><span>12</span></div>
-          <div className="avatar" />
-          <ChevronDown size={16} />
         </header>
         {children}
       </main>

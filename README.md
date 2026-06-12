@@ -8,9 +8,9 @@
 docker compose up --build
 ```
 
-- 前端：http://localhost:3000
-- 后端 API：http://localhost:8000
-- API 文档：http://localhost:8000/docs
+- 前端：http://localhost:4000
+- 后端 API：http://localhost:9000
+- API 文档：http://localhost:9000/docs
 
 ## 本地开发
 
@@ -21,7 +21,7 @@ cd backend
 python -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 9000
 ```
 
 ### 前端
