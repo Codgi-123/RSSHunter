@@ -1,6 +1,7 @@
-import { ArrowLeft, CalendarDays, ExternalLink, RefreshCw, Rss } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { api } from '../api';
+import CopyButton from '../components/CopyButton';
+import VendorBadge from '../components/VendorBadge';
+          <dl><dt>RSS URL</dt><dd className="copy-line"><span>{feed.rss_url}</span><CopyButton text={feed.rss_url} /></dd><dt>厂商</dt><dd><VendorBadge vendor={feed.vendor} /></dd><dt>产品名称</dt><dd>{feed.product}</dd><dt>数据库类型</dt><dd>{feed.db_type}</dd></dl>
+        {view === 'list' ? <><EntryTable entries={entries.items} /><Pagination total={entries.total} page={page} pageSize={pageSize} onPageChange={setLocalPage} onPageSizeChange={(size) => { setPageSize(size); setLocalPage(1); }} /></> : <div className="calendar-layout"><CalendarGrid days={calendar} month={month} onMonthChange={setMonth} onDayClick={setDayItems} />{dayItems && <DayEntriesPanel dayItems={dayItems} onClose={() => setDayItems(null)} />}</div>}
 import CalendarGrid from '../components/CalendarGrid';
 import EntryTable from '../components/EntryTable';
 import { PageTitle } from '../components/Layout';

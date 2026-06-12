@@ -43,7 +43,7 @@ function App() {
     if (page === 'entries') return <EntriesPage feeds={feeds} groups={groups} initialKeyword={globalKeyword} />;
     if (page === 'status') return <StatusPage feeds={feeds} logs={logs} reloadFeeds={loadFeeds} reloadLogs={loadLogs} />;
     if (page === 'docs') return <DocsPage />;
-    return <OverviewPage overview={overview} setPage={setPage} setSelectedGroup={setSelectedGroup} />;
+    return <OverviewPage overview={overview} setPage={setPage} setSelectedFeed={setSelectedFeed} setSelectedGroup={setSelectedGroup} />;
   }, [page, feeds, groups, logs, overview, selectedFeed, selectedGroup, globalKeyword, loadFeeds, loadGroups, loadLogs]);
 
   return (

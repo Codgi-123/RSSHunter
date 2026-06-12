@@ -1,7 +1,8 @@
-import { AlertTriangle, FileText, Rss, TrendingUp, Users } from 'lucide-react';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import MetricCard from '../components/MetricCard';
-import StatusPill from '../components/StatusPill';
+import VendorBadge from '../components/VendorBadge';
+export default function OverviewPage({ overview, setPage, setSelectedFeed, setSelectedGroup }) {
+            <tbody>{pagedRecentFeeds.map((feed) => <tr key={feed.id}><td><button className="table-title-link cell-with-icon" onClick={() => { setSelectedFeed(feed.id); setPage('feed-detail'); }}><Rss size={15} />{feed.name}</button></td><td>{formatDateTime(feed.latest_item_published_at)}</td><td className="number-link">{feed.today_new || 0}</td></tr>)}{!recentFeeds.length && <tr><td colSpan="3" className="empty-cell">暂无最近更新订阅源</td></tr>}</tbody>
+              <button className="card-title-link" onClick={() => { setSelectedGroup(group.id); setPage('group-detail'); }}>{group.name}</button>
+          <tbody>{pagedAbnormalFeeds.map((feed) => <tr key={feed.id}><td><button className="table-title-link" onClick={() => { setSelectedFeed(feed.id); setPage('feed-detail'); }}>{feed.name}</button></td><td><VendorBadge vendor={feed.vendor} /></td><td>{feed.product}</td><td><StatusPill status={feed.status} enabled={feed.enabled} /></td><td>{formatDateTime(feed.last_fetched_at)}</td><td><button className="outline-mini">查看</button><button className="primary-mini">重试</button></td></tr>)}{!abnormalFeeds.length && <tr><td colSpan="6" className="empty-cell">暂无异常订阅源</td></tr>}</tbody>
 import { PageTitle } from '../components/Layout';
 import { formatDateTime } from '../utils/format';
 

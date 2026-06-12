@@ -1,5 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 import { formatDateTime } from '../utils/format';
+import VendorBadge from './VendorBadge';
 
 export default function EntryTable({ entries = [], compact = false, onDetail }) {
   return (
@@ -22,7 +23,7 @@ export default function EntryTable({ entries = [], compact = false, onDetail }) 
             <tr key={entry.id}>
               <td className="title-cell">{entry.title}</td>
               <td><span className="source-chip">{entry.feed_name}</span></td>
-              {!compact && <td>{entry.vendor}</td>}
+              {!compact && <td><VendorBadge vendor={entry.vendor} /></td>}
               {!compact && <td>{entry.product}</td>}
               <td>{formatDateTime(entry.published_at)}</td>
               <td className="summary-cell">{entry.summary || '-'}</td>
