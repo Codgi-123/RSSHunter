@@ -1,6 +1,7 @@
-import { AlertTriangle, Download, PauseCircle, Plus, RefreshCw, Rss, Search, ShieldCheck, Upload } from 'lucide-react';
+import { AlertTriangle, Download, Edit3, Eye, PauseCircle, Plus, RefreshCw, Rss, Search, ShieldCheck, Trash2, Upload } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
+import ActionDialog from '../components/ActionDialog';
 import CopyButton from '../components/CopyButton';
 import { PageTitle } from '../components/Layout';
 import MetricCard from '../components/MetricCard';
@@ -125,12 +126,22 @@ export default function FeedsPage({ feeds, reloadFeeds, setPage, setSelectedFeed
                   <td>{feed.product}</td>
                   <td>{feed.db_type}</td>
                   <td><TagList tags={feed.tags} /></td>
-                  <td className="url-cell"><span>{feed.rss_url}</span><CopyButton text={feed.rss_url} /></td>
+                  <td className="url-cell"><div className="url-cell-inner"><span>{feed.rss_url}</span><CopyButton text={feed.rss_url} /></div></td>
                   <td>{formatDateTime(feed.latest_item_published_at)}</td>
                   <td>{formatDateTime(feed.last_fetched_at)}</td>
                   <td><StatusPill status={feed.status} enabled={feed.enabled} /></td>
                   <td>{feed.groups || '-'}</td>
-                  <td className="row-actions"><button onClick={() => { setSelectedFeed(feed.id); setPage('feed-detail'); }}>查看</button><button onClick={() => openEdit(feed)}>编辑</button><button className="danger-link" onClick={() => deleteFeed(feed)}>删除</button><button onClick={() => refreshFeed(feed)} disabled={busy}>{feed.status === 'normal' ? '刷新' : '重试'}</button></td>
+                  <td className="row-actions action-cell">
+                    <ActionDialog
+                      title={feed.name}
+                      actions={[
+                        { label: '查看详情', icon: <Eye size={16} />, onClick: () => { setSelectedFeed(feed.id); setPage('feed-detail'); } },
+                        { label: '编辑订阅', icon: <Edit3 size={16} />, onClick: () => openEdit(feed) },
+                        { label: feed.status === 'normal' ? '刷新订阅' : '重试抓取', icon: <RefreshCw size={16} />, primary: true, disabled: busy, onClick: () => refreshFeed(feed) },
+                        { label: '删除订阅', icon: <Trash2 size={16} />, danger: true, onClick: () => deleteFeed(feed) },
+                      ]}
+                    />
+                  </td>
                 </tr>
               ))}
               {!items.length && <tr><td colSpan="11" className="empty-cell">暂无订阅源</td></tr>}

@@ -1,6 +1,8 @@
-import { AlertTriangle, FileText, Rss, Users } from 'lucide-react';
+import { AlertTriangle, Eye, FileText, RefreshCw, Rss, Users } from 'lucide-react';
 import { useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { api } from '../api';
+import ActionDialog from '../components/ActionDialog';
 import MetricCard from '../components/MetricCard';
 import Pagination, { getPageItems } from '../components/Pagination';
 import StatusPill from '../components/StatusPill';
@@ -23,6 +25,7 @@ export default function OverviewPage({ overview, setPage, setSelectedFeed, setSe
   const [recentPageSize, setRecentPageSize] = useState(5);
   const [abnormalPage, setAbnormalPage] = useState(1);
   const [abnormalPageSize, setAbnormalPageSize] = useState(5);
+  const [busyFeedId, setBusyFeedId] = useState(null);
   const trend = normalizeTrend(overview.trend);
   const stats = overview.stats || {};
   const recentFeeds = overview.recent_feeds || [];
@@ -38,6 +41,15 @@ export default function OverviewPage({ overview, setPage, setSelectedFeed, setSe
   function openGroup(group) {
     setSelectedGroup(group.id);
     setPage('group-detail');
+  }
+
+  async function retryFeed(feed) {
+    setBusyFeedId(feed.id);
+    try {
+      await api.post(`/feeds/${feed.id}/refresh`, {});
+    } finally {
+      setBusyFeedId(null);
+    }
   }
 
   return (
@@ -111,7 +123,15 @@ export default function OverviewPage({ overview, setPage, setSelectedFeed, setSe
                 <td>{feed.product}</td>
                 <td><StatusPill status={feed.status} enabled={feed.enabled} /></td>
                 <td>{formatDateTime(feed.last_fetched_at)}</td>
-                <td><button className="outline-mini" onClick={() => openFeed(feed)}>查看</button><button className="primary-mini">重试</button></td>
+                <td className="row-actions action-cell">
+                  <ActionDialog
+                    title={feed.name}
+                    actions={[
+                      { label: '查看详情', icon: <Eye size={16} />, onClick: () => openFeed(feed) },
+                      { label: '重试抓取', icon: <RefreshCw size={16} />, primary: true, disabled: busyFeedId === feed.id, onClick: () => retryFeed(feed) },
+                    ]}
+                  />
+                </td>
               </tr>
             ))}
             {!abnormalFeeds.length && <tr><td colSpan="6" className="empty-cell">暂无异常订阅源</td></tr>}

@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS feeds (
   enabled INTEGER NOT NULL DEFAULT 1,
   status TEXT NOT NULL DEFAULT 'normal',
   last_error TEXT DEFAULT '',
+  etag TEXT DEFAULT '',
+  last_modified TEXT DEFAULT '',
   latest_item_published_at TEXT,
   last_fetched_at TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -56,3 +58,8 @@ CREATE TABLE IF NOT EXISTS fetch_logs (
   total_entries INTEGER NOT NULL DEFAULT 0,
   error_message TEXT DEFAULT ''
 );
+
+CREATE INDEX IF NOT EXISTS idx_entries_published_at ON entries(published_at);
+CREATE INDEX IF NOT EXISTS idx_entries_feed_id ON entries(feed_id);
+CREATE INDEX IF NOT EXISTS idx_entries_feed_published_at ON entries(feed_id, published_at);
+CREATE INDEX IF NOT EXISTS idx_group_feeds_group_feed ON group_feeds(group_id, feed_id);

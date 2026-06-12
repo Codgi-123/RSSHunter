@@ -22,22 +22,31 @@ export default function GroupDetailPage({ groupId, setPage }) {
   const [page, setLocalPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  async function load() {
+  async function loadGroup() {
     if (!groupId) return;
-    const params = { ...filters, limit: pageSize, offset: (page - 1) * pageSize };
-    const [groupData, entryData, sourceData, calendarData] = await Promise.all([
-      api.get(`/groups/${groupId}`),
-      api.get(`/groups/${groupId}/entries`, params),
-      api.get(`/groups/${groupId}/entries-by-source`),
-      api.get(`/groups/${groupId}/calendar`),
-    ]);
-    setGroup(groupData);
-    setEntries(entryData);
-    setBySource(sourceData);
-    setCalendar(calendarData);
+    setGroup(await api.get(`/groups/${groupId}`));
   }
 
-  useEffect(() => { load(); }, [groupId, filters.keyword, filters.vendor, filters.product, page, pageSize]);
+  async function loadEntries() {
+    if (!groupId) return;
+    const params = { ...filters, limit: pageSize, offset: (page - 1) * pageSize };
+    setEntries(await api.get(`/groups/${groupId}/entries`, params));
+  }
+
+  async function loadSource() {
+    if (!groupId || view !== 'source') return;
+    setBySource(await api.get(`/groups/${groupId}/entries-by-source`));
+  }
+
+  async function loadCalendar() {
+    if (!groupId || view !== 'calendar') return;
+    setCalendar(await api.get(`/groups/${groupId}/calendar`, { month }));
+  }
+
+  useEffect(() => { loadGroup(); }, [groupId]);
+  useEffect(() => { loadEntries(); }, [groupId, filters.keyword, filters.vendor, filters.product, page, pageSize]);
+  useEffect(() => { loadSource(); }, [groupId, view]);
+  useEffect(() => { loadCalendar(); }, [groupId, view, month]);
 
   const vendors = useMemo(() => unique(group?.feeds || [], 'vendor'), [group]);
   const products = useMemo(() => unique(group?.feeds || [], 'product'), [group]);
@@ -60,7 +69,7 @@ export default function GroupDetailPage({ groupId, setPage }) {
         <div className="tabs"><button className={view === 'aggregate' ? 'active' : ''} onClick={() => setView('aggregate')}><List size={16} />聚合列表</button><button className={view === 'source' ? 'active' : ''} onClick={() => setView('source')}>按源分组</button><button className={view === 'calendar' ? 'active' : ''} onClick={() => setView('calendar')}>日历视图</button><label><input value={filters.keyword} onChange={(event) => updateFilter('keyword', event.target.value)} placeholder="搜索标题、摘要或来源订阅源" /><Search size={16} /></label><select value={filters.vendor} onChange={(event) => updateFilter('vendor', event.target.value)}><option value="">厂商</option>{vendors.map((item) => <option key={item}>{item}</option>)}</select><select value={filters.product} onChange={(event) => updateFilter('product', event.target.value)}><option value="">产品</option>{products.map((item) => <option key={item}>{item}</option>)}</select></div>
         {view === 'aggregate' && <><EntryTable entries={entries.items} /><Pagination total={entries.total} page={page} pageSize={pageSize} onPageChange={setLocalPage} onPageSizeChange={(size) => { setPageSize(size); setLocalPage(1); }} /></>}
         {view === 'source' && <SourceGroupedList groups={sourceGroups} />}
-        {view === 'calendar' && <div className="calendar-layout"><CalendarGrid days={calendar} month={month} onMonthChange={setMonth} onDayClick={setDayItems} />{dayItems && <DayEntriesPanel dayItems={dayItems} onClose={() => setDayItems(null)} />}</div>}
+        {view === 'calendar' && <div className="calendar-layout"><CalendarGrid days={calendar} month={month} onMonthChange={(value) => { setDayItems(null); setMonth(value); }} onDayClick={setDayItems} />{dayItems && <DayEntriesPanel dayItems={dayItems} onClose={() => setDayItems(null)} />}</div>}
       </section>
     </>
   );

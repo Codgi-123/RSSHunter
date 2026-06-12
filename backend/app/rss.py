@@ -1,6 +1,8 @@
 import asyncio
 import os
-from datetime import datetime, timezone
+import re
+from calendar import timegm
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
 
@@ -17,6 +19,11 @@ def now_iso() -> str:
 def parse_date(value: Any) -> str | None:
     if not value:
         return None
+    if hasattr(value, "tm_year"):
+        try:
+            return datetime.fromtimestamp(timegm(value), timezone.utc).replace(microsecond=0).isoformat()
+        except Exception:
+            return None
     if isinstance(value, str):
         try:
             return parsedate_to_datetime(value).astimezone(timezone.utc).replace(microsecond=0).isoformat()
@@ -26,6 +33,41 @@ def parse_date(value: Any) -> str | None:
             except Exception:
                 return None
     return None
+
+
+def date_iso(year: int, month: int, day: int) -> str | None:
+    try:
+        return datetime(year, month, day, tzinfo=timezone(timedelta(hours=8))).astimezone(timezone.utc).replace(microsecond=0).isoformat()
+    except ValueError:
+        return None
+
+
+def infer_date_from_text(*values: Any) -> str | None:
+    text = " ".join(str(value or "") for value in values)
+    patterns = [
+        r"(?<!\d)(20\d{2})(\d{2})(\d{2})(?!\d)",
+        r"(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})",
+        r"(20\d{2})年(\d{1,2})月(\d{1,2})日",
+        r"(20\d{2})年.*?-(\d{1,2})-(\d{1,2})(?:\D|$)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            parsed = date_iso(*(int(item) for item in match.groups()))
+            if parsed:
+                return parsed
+    month_match = re.search(r"(20\d{2})年(\d{1,2})月", text)
+    if month_match:
+        return date_iso(int(month_match.group(1)), int(month_match.group(2)), 1)
+    return None
+
+
+def entry_published_at(item: Any) -> str | None:
+    for key in ("published", "updated", "created", "published_parsed", "updated_parsed", "created_parsed"):
+        parsed = parse_date(item.get(key))
+        if parsed:
+            return parsed
+    return infer_date_from_text(item.get("title"), item.get("id"), item.get("guid"), item.get("link"), item.get("summary"))
 
 
 async def fetch_feed(feed_id: int) -> dict:
@@ -42,8 +84,24 @@ async def fetch_feed(feed_id: int) -> dict:
     error = ""
     status = "normal"
     try:
+        headers = {"User-Agent": "RSSHunter/1.0"}
+        if feed.get("etag"):
+            headers["If-None-Match"] = feed["etag"]
+        if feed.get("last_modified"):
+            headers["If-Modified-Since"] = feed["last_modified"]
         async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
-            response = await client.get(feed["rss_url"], headers={"User-Agent": "RSSHunter/1.0"})
+            response = await client.get(feed["rss_url"], headers=headers)
+            if response.status_code == 304:
+                with db() as conn:
+                    conn.execute(
+                        "UPDATE feeds SET status = 'normal', last_error = '', last_fetched_at = ?, updated_at = ? WHERE id = ?",
+                        (started_at, started_at, feed_id),
+                    )
+                    conn.execute(
+                        "INSERT INTO fetch_logs(feed_id, started_at, result, new_entries, total_entries, error_message) VALUES (?, ?, 'not_modified', 0, 0, '')",
+                        (feed_id, started_at),
+                    )
+                return {"result": "not_modified", "new_entries": 0, "total_entries": 0}
             response.raise_for_status()
         parsed = feedparser.parse(response.content)
         if parsed.bozo and not parsed.entries:
@@ -57,8 +115,9 @@ async def fetch_feed(feed_id: int) -> dict:
                 title = item.get("title") or "未命名动态"
                 link = item.get("link") or ""
                 summary = item.get("summary") or item.get("description") or ""
-                published = parse_date(item.get("published") or item.get("updated") or item.get("created")) or now_iso()
-                latest = max(latest, published) if latest else published
+                published = entry_published_at(item)
+                if published:
+                    latest = max(latest, published) if latest else published
                 cur = conn.execute(
                     """INSERT OR IGNORE INTO entries(feed_id, guid, title, link, summary, published_at, fetched_at)
                        VALUES (?, ?, ?, ?, ?, ?, ?)""",
@@ -66,8 +125,16 @@ async def fetch_feed(feed_id: int) -> dict:
                 )
                 new_entries += cur.rowcount
             conn.execute(
-                "UPDATE feeds SET status = 'normal', last_error = '', latest_item_published_at = COALESCE(?, latest_item_published_at), last_fetched_at = ?, updated_at = ? WHERE id = ?",
-                (latest, started_at, started_at, feed_id),
+                """UPDATE feeds
+                   SET status = 'normal',
+                       last_error = '',
+                       etag = COALESCE(NULLIF(?, ''), etag),
+                       last_modified = COALESCE(NULLIF(?, ''), last_modified),
+                       latest_item_published_at = COALESCE(?, latest_item_published_at),
+                       last_fetched_at = ?,
+                       updated_at = ?
+                   WHERE id = ?""",
+                (response.headers.get("etag", ""), response.headers.get("last-modified", ""), latest, started_at, started_at, feed_id),
             )
             conn.execute(
                 "INSERT INTO fetch_logs(feed_id, started_at, result, new_entries, total_entries, error_message) VALUES (?, ?, 'success', ?, ?, '')",

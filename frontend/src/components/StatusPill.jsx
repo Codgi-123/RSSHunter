@@ -4,6 +4,7 @@ const statusMap = {
   parse_error: ['解析异常', 'status-warn'],
   disabled: ['已停用', 'status-muted'],
   success: ['成功', 'status-ok'],
+  not_modified: ['无更新', 'status-ok'],
   failed: ['失败', 'status-bad'],
 };
 

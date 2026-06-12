@@ -22,19 +22,28 @@ export default function FeedDetailPage({ feedId, setPage }) {
   const [page, setLocalPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  async function load() {
+  async function loadFeed() {
     if (!feedId) return;
-    const [feedData, entryData, calendarData] = await Promise.all([
-      api.get(`/feeds/${feedId}`),
-      api.get(`/feeds/${feedId}/entries`, { keyword, limit: pageSize, offset: (page - 1) * pageSize }),
-      api.get(`/feeds/${feedId}/calendar`),
-    ]);
-    setFeed(feedData);
-    setEntries(entryData);
-    setCalendar(calendarData);
+    setFeed(await api.get(`/feeds/${feedId}`));
   }
 
-  useEffect(() => { load(); }, [feedId, keyword, page, pageSize]);
+  async function loadEntries() {
+    if (!feedId) return;
+    setEntries(await api.get(`/feeds/${feedId}/entries`, { keyword, limit: pageSize, offset: (page - 1) * pageSize }));
+  }
+
+  async function loadCalendar() {
+    if (!feedId || view !== 'calendar') return;
+    setCalendar(await api.get(`/feeds/${feedId}/calendar`, { month }));
+  }
+
+  async function load() {
+    await Promise.all([loadFeed(), loadEntries(), loadCalendar()]);
+  }
+
+  useEffect(() => { loadFeed(); }, [feedId]);
+  useEffect(() => { loadEntries(); }, [feedId, keyword, page, pageSize]);
+  useEffect(() => { loadCalendar(); }, [feedId, view, month]);
 
   if (!feed) return <PageTitle title="订阅详情" subtitle="正在加载订阅源信息..." />;
 
@@ -50,7 +59,7 @@ export default function FeedDetailPage({ feedId, setPage }) {
       </section>
       <section className="panel">
         <div className="tabs"><button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}>条目列表</button><button className={view === 'calendar' ? 'active' : ''} onClick={() => setView('calendar')}><CalendarDays size={16} />日历视图</button><input value={keyword} onChange={(event) => { setLocalPage(1); setKeyword(event.target.value); }} placeholder="搜索标题或摘要" /></div>
-        {view === 'list' ? <><EntryTable entries={entries.items} /><Pagination total={entries.total} page={page} pageSize={pageSize} onPageChange={setLocalPage} onPageSizeChange={(size) => { setPageSize(size); setLocalPage(1); }} /></> : <div className="calendar-layout"><CalendarGrid days={calendar} month={month} onMonthChange={setMonth} onDayClick={setDayItems} />{dayItems && <DayEntriesPanel dayItems={dayItems} onClose={() => setDayItems(null)} />}</div>}
+        {view === 'list' ? <><EntryTable entries={entries.items} /><Pagination total={entries.total} page={page} pageSize={pageSize} onPageChange={setLocalPage} onPageSizeChange={(size) => { setPageSize(size); setLocalPage(1); }} /></> : <div className="calendar-layout"><CalendarGrid days={calendar} month={month} onMonthChange={(value) => { setDayItems(null); setMonth(value); }} onDayClick={setDayItems} />{dayItems && <DayEntriesPanel dayItems={dayItems} onClose={() => setDayItems(null)} />}</div>}
       </section>
     </>
   );

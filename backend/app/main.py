@@ -45,6 +45,24 @@ def now_iso():
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def next_day(value: str) -> str:
+    try:
+        return (datetime.fromisoformat(value).date() + timedelta(days=1)).isoformat()
+    except ValueError:
+        return value
+
+
+def month_range(month: str) -> tuple[str, str] | None:
+    if not month:
+        return None
+    try:
+        start = datetime.strptime(month, "%Y-%m").date().replace(day=1)
+    except ValueError:
+        return None
+    next_month = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return start.isoformat(), (next_month - timedelta(days=1)).isoformat()
+
+
 def init_db():
     schema = Path(__file__).with_name("schema.sql").read_text()
     conn = connect()
@@ -58,6 +76,71 @@ def init_db():
 
 TENCENT_VECTOR_RSS_URL = "https://rsshub.codgi.xin/tencent/cloud/document/product-updates/向量数据库"
 
+VOLCENGINE_SOURCE_META = {
+    "Redis": ("Redis", "Redis"),
+    "Valkey": ("Valkey", "Valkey"),
+    "MySQL Community 8.4": ("MySQL", "MySQL Community 8.4"),
+    "MySQL Community 8.0": ("MySQL", "MySQL Community 8.0"),
+    "TiDB": ("PingCAP", "TiDB"),
+    "OceanBase Docs": ("OceanBase", "OceanBase"),
+    "OceanBase GitHub": ("OceanBase", "OceanBase"),
+    "PolarDB-X": ("PolarDB-X", "PolarDB-X"),
+    "PostgreSQL": ("PostgreSQL", "PostgreSQL"),
+    "MongoDB": ("MongoDB", "MongoDB"),
+    "Apache HBase": ("Apache", "Apache HBase"),
+    "Apache Phoenix": ("Apache", "Apache Phoenix"),
+    "SQL Server": ("Microsoft", "SQL Server"),
+    "Elasticsearch": ("Elastic", "Elasticsearch"),
+    "OpenSearch": ("OpenSearch", "OpenSearch"),
+    "Milvus": ("Milvus", "Milvus"),
+    "Qdrant": ("Qdrant", "Qdrant"),
+    "Weaviate": ("Weaviate", "Weaviate"),
+    "Chroma": ("Chroma", "Chroma"),
+    "FAISS": ("Meta", "FAISS"),
+    "HNSWlib": ("nmslib", "HNSWlib"),
+    "DiskANN": ("Microsoft", "DiskANN"),
+    "pgvector": ("pgvector", "pgvector"),
+    "Mem0": ("Mem0", "Mem0"),
+    "Zep": ("Zep", "Zep"),
+    "Letta / MemGPT": ("Letta", "Letta / MemGPT"),
+    "LangGraph memory": ("LangChain", "LangGraph memory"),
+    "TencentDB Agent Memory": ("腾讯云", "TencentDB Agent Memory"),
+    "OpenViking": ("OpenViking", "OpenViking"),
+    "Supabase GitHub": ("Supabase", "Supabase"),
+    "Supabase Changelog": ("Supabase", "Supabase"),
+}
+
+
+def unique_nonempty(values: list[str]) -> list[str]:
+    result = []
+    for value in values:
+        value = (value or "").strip()
+        if value and value not in result:
+            result.append(value)
+    return result
+
+
+def strip_dynamic_suffix(value: str) -> str:
+    value = (value or "").strip()
+    if value.endswith(" 动态"):
+        return value[:-3].strip()
+    if value.endswith("动态"):
+        return value[:-2].strip()
+    return value
+
+
+def actual_volcengine_source_name(feed: dict[str, Any]) -> str:
+    name = strip_dynamic_suffix(feed.get("name") or "")
+    product = (feed.get("product") or "").strip()
+    prefix = f"火山引擎 {product} / "
+    if product and name.startswith(prefix):
+        return name[len(prefix):].strip()
+    if name.startswith("火山引擎 "):
+        parts = [part.strip() for part in name.removeprefix("火山引擎 ").split(" / ") if part.strip()]
+        if parts:
+            return parts[-1]
+    return name
+
 
 def table_columns(conn, table: str) -> set[str]:
     return {row["name"] for row in rows(conn.execute(f"PRAGMA table_info({table})"))}
@@ -66,6 +149,15 @@ def table_columns(conn, table: str) -> set[str]:
 def migrate(conn):
     if "website_url" in table_columns(conn, "feeds"):
         conn.execute("ALTER TABLE feeds DROP COLUMN website_url")
+    feed_columns = table_columns(conn, "feeds")
+    if "etag" not in feed_columns:
+        conn.execute("ALTER TABLE feeds ADD COLUMN etag TEXT DEFAULT ''")
+    if "last_modified" not in feed_columns:
+        conn.execute("ALTER TABLE feeds ADD COLUMN last_modified TEXT DEFAULT ''")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_entries_published_at ON entries(published_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_entries_feed_id ON entries(feed_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_entries_feed_published_at ON entries(feed_id, published_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_group_feeds_group_feed ON group_feeds(group_id, feed_id)")
     conn.execute(
         """UPDATE feeds
            SET name = ?, product = ?, db_type = ?, tags = ?, description = ?
@@ -85,6 +177,41 @@ def migrate(conn):
             """INSERT OR IGNORE INTO group_feeds(group_id, feed_id, sort_order)
                VALUES (?, ?, COALESCE((SELECT MAX(sort_order) + 1 FROM group_feeds WHERE group_id = ?), 0))""",
             (vector_group["id"], vector_feed["id"], vector_group["id"]),
+        )
+    normalize_volcengine_feed_metadata(conn)
+
+
+def normalize_volcengine_feed_metadata(conn):
+    candidates = rows(
+        conn.execute(
+            """SELECT id, name, vendor, product, db_type, tags, description
+               FROM feeds
+               WHERE vendor = ? OR name LIKE ? OR tags LIKE ?""",
+            ("火山引擎", "火山引擎 %", "%火山引擎%"),
+        )
+    )
+    updated_at = now_iso()
+    for feed in candidates:
+        source = actual_volcengine_source_name(feed)
+        if not source:
+            continue
+        vendor, product = VOLCENGINE_SOURCE_META.get(source, (source, source))
+        db_type = feed.get("db_type") or ""
+        tags = ",".join(unique_nonempty([vendor, product, source, db_type]))
+        values = {
+            "name": f"{source} 动态",
+            "vendor": vendor,
+            "product": product,
+            "tags": tags,
+            "description": f"{source} 更新订阅",
+        }
+        if all((feed.get(key) or "") == value for key, value in values.items()):
+            continue
+        conn.execute(
+            """UPDATE feeds
+               SET name = ?, vendor = ?, product = ?, tags = ?, description = ?, updated_at = ?
+               WHERE id = ?""",
+            (values["name"], values["vendor"], values["product"], values["tags"], values["description"], updated_at, feed["id"]),
         )
 
 
@@ -149,13 +276,13 @@ def query_entries(filters: dict[str, Any], limit=50, offset=0):
         if filters.get(k):
             where.append(f"{col} = ?"); params.append(filters[k])
     if filters.get("start"):
-        where.append("date(e.published_at) >= date(?)"); params.append(filters["start"])
+        where.append("e.published_at >= ?"); params.append(filters["start"])
     if filters.get("end"):
-        where.append("date(e.published_at) <= date(?)"); params.append(filters["end"])
+        where.append("e.published_at < ?"); params.append(next_day(filters["end"]))
     sql_where = " WHERE " + " AND ".join(where) if where else ""
     sql = f"""SELECT e.*, f.name AS feed_name, f.vendor, f.product, f.db_type
               FROM entries e JOIN feeds f ON f.id=e.feed_id {sql_where}
-              ORDER BY datetime(e.published_at) DESC LIMIT ? OFFSET ?"""
+              ORDER BY e.published_at DESC, e.id DESC LIMIT ? OFFSET ?"""
     count_sql = f"SELECT COUNT(*) AS c FROM entries e JOIN feeds f ON f.id=e.feed_id {sql_where}"
     with db() as conn:
         total = one(conn.execute(count_sql, params))["c"]
@@ -163,7 +290,15 @@ def query_entries(filters: dict[str, Any], limit=50, offset=0):
     return {"total": total, "items": data}
 
 
-def calendar(filters):
+def calendar(filters, month: str = ""):
+    month_bounds = month_range(month)
+    filters = {**filters}
+    if month_bounds:
+        month_start, month_end = month_bounds
+        if not filters.get("start") or filters["start"] < month_start:
+            filters["start"] = month_start
+        if not filters.get("end") or filters["end"] > month_end:
+            filters["end"] = month_end
     result = query_entries(filters, limit=1000)
     days = {}
     for item in result["items"]:
@@ -267,8 +402,8 @@ def feed_entries(feed_id: int, keyword: str = "", limit: int = 50, offset: int =
 
 
 @app.get("/api/feeds/{feed_id}/calendar")
-def feed_calendar(feed_id: int):
-    return calendar({"feed_id": feed_id})
+def feed_calendar(feed_id: int, month: str = ""):
+    return calendar({"feed_id": feed_id}, month)
 
 
 @app.get("/api/groups")
@@ -342,8 +477,8 @@ def group_entries_by_source(group_id: int):
 
 
 @app.get("/api/groups/{group_id}/calendar")
-def group_calendar(group_id: int):
-    return calendar({"group_id": group_id})
+def group_calendar(group_id: int, month: str = ""):
+    return calendar({"group_id": group_id}, month)
 
 
 @app.get("/api/entries")
@@ -361,8 +496,8 @@ def get_entry(entry_id: int):
 
 
 @app.get("/api/calendar")
-def global_calendar(keyword: str = "", vendor: str = "", product: str = "", db_type: str = "", feed_id: int | None = None, group_id: int | None = None):
-    return calendar({"keyword": keyword, "vendor": vendor, "product": product, "db_type": db_type, "feed_id": feed_id, "group_id": group_id})
+def global_calendar(keyword: str = "", vendor: str = "", product: str = "", db_type: str = "", feed_id: int | None = None, group_id: int | None = None, start: str = "", end: str = "", month: str = ""):
+    return calendar({"keyword": keyword, "vendor": vendor, "product": product, "db_type": db_type, "feed_id": feed_id, "group_id": group_id, "start": start, "end": end}, month)
 
 
 @app.get("/api/fetch-logs")
