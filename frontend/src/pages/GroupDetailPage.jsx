@@ -8,6 +8,7 @@ import Pagination, { getPageItems } from '../components/Pagination';
 import StatusPill from '../components/StatusPill';
 import TagList from '../components/TagList';
 import { formatDateTime, unique } from '../utils/format';
+import { viewLabel } from '../utils/view';
 
 export default function GroupDetailPage({ groupId, setPage }) {
   const [group, setGroup] = useState(null);
@@ -53,15 +54,14 @@ export default function GroupDetailPage({ groupId, setPage }) {
       <section className="detail-hero group-hero">
         <div className="hero-title"><div className="big-icon"><Users size={36} /></div><div><h2>{group.name}</h2><p>{group.description}</p></div></div>
         <div className="group-stat-rail"><article><List /><span>今日新增</span><b>{entries.items.filter((item) => item.created_at?.slice(0, 10) === new Date().toISOString().slice(0, 10)).length}</b></article><article><CalendarDays /><span>最近7天新增</span><b>{entries.total}</b></article><article><Grid2X2 /><span>订阅源数量</span><b>{group.feeds.length}</b></article></div>
-        <div className="detail-columns"><dl><dt>包含订阅数</dt><dd>{group.feeds.length}</dd><dt>默认视图</dt><dd>{group.default_view}</dd><dt>当前状态</dt><dd><StatusPill status="normal" enabled={group.enabled} /></dd></dl><dl><dt>关联标签</dt><dd><TagList tags={group.tags} /></dd><dt>来源厂商</dt><dd>{vendors.join('、') || '-'}</dd><dt>最近更新时间</dt><dd>{formatDateTime(entries.items[0]?.published_at)}</dd></dl></div>
+        <div className="detail-columns"><dl><dt>包含订阅数</dt><dd>{group.feeds.length}</dd><dt>默认视图</dt><dd>{viewLabel(group.default_view)}</dd><dt>当前状态</dt><dd><StatusPill status="normal" enabled={group.enabled} /></dd></dl><dl><dt>关联标签</dt><dd><TagList tags={group.tags} /></dd><dt>来源厂商</dt><dd>{vendors.join('、') || '-'}</dd><dt>最近更新时间</dt><dd>{formatDateTime(entries.items[0]?.published_at)}</dd></dl></div>
       </section>
       <section className="panel">
         <div className="tabs"><button className={view === 'aggregate' ? 'active' : ''} onClick={() => setView('aggregate')}><List size={16} />聚合列表</button><button className={view === 'source' ? 'active' : ''} onClick={() => setView('source')}>按源分组</button><button className={view === 'calendar' ? 'active' : ''} onClick={() => setView('calendar')}>日历视图</button><label><input value={filters.keyword} onChange={(event) => updateFilter('keyword', event.target.value)} placeholder="搜索标题、摘要或来源订阅源" /><Search size={16} /></label><select value={filters.vendor} onChange={(event) => updateFilter('vendor', event.target.value)}><option value="">厂商</option>{vendors.map((item) => <option key={item}>{item}</option>)}</select><select value={filters.product} onChange={(event) => updateFilter('product', event.target.value)}><option value="">产品</option>{products.map((item) => <option key={item}>{item}</option>)}</select></div>
         {view === 'aggregate' && <><EntryTable entries={entries.items} /><Pagination total={entries.total} page={page} pageSize={pageSize} onPageChange={setLocalPage} onPageSizeChange={(size) => { setPageSize(size); setLocalPage(1); }} /></>}
         {view === 'source' && <SourceGroupedList groups={sourceGroups} />}
-        {view === 'calendar' && <CalendarGrid days={calendar} month={month} onMonthChange={setMonth} onDayClick={setDayItems} />}
+        {view === 'calendar' && <div className="calendar-layout"><CalendarGrid days={calendar} month={month} onMonthChange={setMonth} onDayClick={setDayItems} />{dayItems && <DayEntriesPanel dayItems={dayItems} onClose={() => setDayItems(null)} />}</div>}
       </section>
-      {dayItems && <DayEntriesPanel dayItems={dayItems} onClose={() => setDayItems(null)} />}
     </>
   );
 }

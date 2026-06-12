@@ -4,6 +4,7 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import MetricCard from '../components/MetricCard';
 import Pagination, { getPageItems } from '../components/Pagination';
 import StatusPill from '../components/StatusPill';
+import VendorBadge from '../components/VendorBadge';
 import { PageTitle } from '../components/Layout';
 import { formatDateTime } from '../utils/format';
 
@@ -17,7 +18,7 @@ function normalizeTrend(rows = []) {
   });
 }
 
-export default function OverviewPage({ overview, setPage, setSelectedGroup }) {
+export default function OverviewPage({ overview, setPage, setSelectedFeed, setSelectedGroup }) {
   const [recentPage, setRecentPage] = useState(1);
   const [recentPageSize, setRecentPageSize] = useState(5);
   const [abnormalPage, setAbnormalPage] = useState(1);
@@ -28,6 +29,16 @@ export default function OverviewPage({ overview, setPage, setSelectedGroup }) {
   const abnormalFeeds = overview.abnormal_feeds || [];
   const pagedRecentFeeds = getPageItems(recentFeeds, recentPage, recentPageSize);
   const pagedAbnormalFeeds = getPageItems(abnormalFeeds, abnormalPage, abnormalPageSize);
+
+  function openFeed(feed) {
+    setSelectedFeed?.(feed.id);
+    setPage('feed-detail');
+  }
+
+  function openGroup(group) {
+    setSelectedGroup(group.id);
+    setPage('group-detail');
+  }
 
   return (
     <>
@@ -57,7 +68,16 @@ export default function OverviewPage({ overview, setPage, setSelectedGroup }) {
           <div className="panel-header"><h2>最近更新订阅源</h2><button className="link-button" onClick={() => setPage('feeds')}>查看更多</button></div>
           <table className="data-table compact-table">
             <thead><tr><th>订阅源名称</th><th>最近更新时间</th><th>今日新增</th></tr></thead>
-            <tbody>{pagedRecentFeeds.map((feed) => <tr key={feed.id}><td><span className="cell-with-icon"><Rss size={15} />{feed.name}</span></td><td>{formatDateTime(feed.latest_item_published_at)}</td><td className="number-link">{feed.today_new || 0}</td></tr>)}{!recentFeeds.length && <tr><td colSpan="3" className="empty-cell">暂无最近更新订阅源</td></tr>}</tbody>
+            <tbody>
+              {pagedRecentFeeds.map((feed) => (
+                <tr key={feed.id}>
+                  <td><button className="table-title-link cell-with-icon" onClick={() => openFeed(feed)}><Rss size={15} />{feed.name}</button></td>
+                  <td>{formatDateTime(feed.latest_item_published_at)}</td>
+                  <td className="number-link">{feed.today_new || 0}</td>
+                </tr>
+              ))}
+              {!recentFeeds.length && <tr><td colSpan="3" className="empty-cell">暂无最近更新订阅源</td></tr>}
+            </tbody>
           </table>
           <Pagination total={recentFeeds.length} page={recentPage} pageSize={recentPageSize} onPageChange={setRecentPage} onPageSizeChange={(size) => { setRecentPageSize(size); setRecentPage(1); }} />
         </div>
@@ -69,11 +89,11 @@ export default function OverviewPage({ overview, setPage, setSelectedGroup }) {
           {(overview.groups || []).map((group, index) => (
             <article className="quick-group-card" key={group.id}>
               <div className={`symbol-card color-${index % 5}`}>{['▰', '◆', '♜', '✣', '◒'][index % 5]}</div>
-              <h3>{group.name}</h3>
+              <button className="card-title-link" onClick={() => openGroup(group)}>{group.name}</button>
               <p><span>包含订阅数</span><b>{group.feed_count || 0}</b></p>
               <p><span>今日新增</span><b>{group.today_new || 0}</b></p>
               <p><span>最近更新时间</span><b>{formatDateTime(group.latest_update)}</b></p>
-              <button onClick={() => { setSelectedGroup(group.id); setPage('group-detail'); }}>查看详情</button>
+              <button onClick={() => openGroup(group)}>查看详情</button>
             </article>
           ))}
         </div>
@@ -83,7 +103,19 @@ export default function OverviewPage({ overview, setPage, setSelectedGroup }) {
         <div className="panel-header"><h2>异常订阅源</h2><button className="link-button" onClick={() => setPage('status')}>查看更多</button></div>
         <table className="data-table">
           <thead><tr><th>订阅名称</th><th>厂商</th><th>产品</th><th>异常类型</th><th>最近抓取时间</th><th>操作</th></tr></thead>
-          <tbody>{pagedAbnormalFeeds.map((feed) => <tr key={feed.id}><td>{feed.name}</td><td>{feed.vendor}</td><td>{feed.product}</td><td><StatusPill status={feed.status} enabled={feed.enabled} /></td><td>{formatDateTime(feed.last_fetched_at)}</td><td><button className="outline-mini">查看</button><button className="primary-mini">重试</button></td></tr>)}{!abnormalFeeds.length && <tr><td colSpan="6" className="empty-cell">暂无异常订阅源</td></tr>}</tbody>
+          <tbody>
+            {pagedAbnormalFeeds.map((feed) => (
+              <tr key={feed.id}>
+                <td><button className="table-title-link" onClick={() => openFeed(feed)}>{feed.name}</button></td>
+                <td><VendorBadge vendor={feed.vendor} /></td>
+                <td>{feed.product}</td>
+                <td><StatusPill status={feed.status} enabled={feed.enabled} /></td>
+                <td>{formatDateTime(feed.last_fetched_at)}</td>
+                <td><button className="outline-mini" onClick={() => openFeed(feed)}>查看</button><button className="primary-mini">重试</button></td>
+              </tr>
+            ))}
+            {!abnormalFeeds.length && <tr><td colSpan="6" className="empty-cell">暂无异常订阅源</td></tr>}
+          </tbody>
         </table>
         <Pagination total={abnormalFeeds.length} page={abnormalPage} pageSize={abnormalPageSize} onPageChange={setAbnormalPage} onPageSizeChange={(size) => { setAbnormalPageSize(size); setAbnormalPage(1); }} />
       </section>

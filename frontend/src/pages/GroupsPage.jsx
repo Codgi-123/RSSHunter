@@ -51,6 +51,11 @@ export default function GroupsPage({ groups, feeds, reloadGroups, setPage, setSe
     await reloadGroups();
   }
 
+  function openGroup(group) {
+    setSelectedGroup(group.id);
+    setPage('group-detail');
+  }
+
   function updateKeyword(value) {
     setLocalPage(1);
     setKeyword(value);
@@ -69,11 +74,14 @@ export default function GroupsPage({ groups, feeds, reloadGroups, setPage, setSe
         {pagedGroups.map((group, index) => (
           <article className="group-card" key={group.id}>
             <div className={`symbol-card color-${index % 5}`}><Users size={24} /></div>
-            <h3>{group.name}</h3><p>{group.description || '暂无描述'}</p>
+            <button className="card-title-link" onClick={() => openGroup(group)}>{group.name}</button>
+            <p>{group.description || '暂无描述'}</p>
             <TagList tags={group.tags} />
-            <div className="group-meta"><span>包含订阅数</span><b>{group.feed_count || 0}</b></div><div className="group-meta"><span>今日新增</span><b>{group.today_new || 0}</b></div><div className="group-meta"><span>最近更新时间</span><b>{formatDateTime(group.latest_update)}</b></div>
+            <div className="group-meta"><span>包含订阅数</span><b>{group.feed_count || 0}</b></div>
+            <div className="group-meta"><span>今日新增</span><b>{group.today_new || 0}</b></div>
+            <div className="group-meta"><span>最近更新时间</span><b>{formatDateTime(group.latest_update)}</b></div>
             <StatusPill status="normal" enabled={group.enabled} />
-            <div className="card-actions"><button onClick={() => { setSelectedGroup(group.id); setPage('group-detail'); }}>查看详情</button><button onClick={() => hydrateAndEdit(group)}><Edit3 size={15} />编辑</button><button className="danger-link" onClick={() => deleteGroup(group)}>删除</button></div>
+            <div className="card-actions"><button onClick={() => openGroup(group)}>查看详情</button><button onClick={() => hydrateAndEdit(group)}><Edit3 size={15} />编辑</button><button className="danger-link" onClick={() => deleteGroup(group)}>删除</button></div>
           </article>
         ))}
       </section>

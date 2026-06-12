@@ -1,4 +1,5 @@
-import { BookOpen, Database, FileText, Home, List, Search, ShieldCheck, Users } from 'lucide-react';
+import { BookOpen, ChevronLeft, ChevronRight, Database, FileText, Home, List, Menu, Search, ShieldCheck, Users } from 'lucide-react';
+import { useState } from 'react';
 
 const nav = [
   ['overview', '首页概览', Home],
@@ -10,19 +11,29 @@ const nav = [
 ];
 
 export default function Layout({ page, setPage, globalKeyword, setGlobalKeyword, children }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  function go(nextPage) {
+    setPage(nextPage);
+    setMobileOpen(false);
+  }
+
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''} ${mobileOpen ? 'mobile-sidebar-open' : ''}`}>
+      <button className="mobile-menu-button" onClick={() => setMobileOpen(true)}><Menu size={20} />菜单</button>
       <aside className="sidebar">
         <div className="brand-mark"><Database size={28} /><strong>数据库动态 RSS 管理平台</strong></div>
         <nav className="side-nav">
           {nav.map(([id, label, Icon]) => (
-            <button key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)}>
-              <Icon size={21} />{label}
+            <button key={id} title={label} className={page === id ? 'active' : ''} onClick={() => go(id)}>
+              <Icon size={21} /><span>{label}</span>
             </button>
           ))}
         </nav>
-        <button className="collapse-button">≪　收起菜单</button>
+        <button className="collapse-button" onClick={() => setCollapsed(!collapsed)}>{collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}<span>{collapsed ? '展开菜单' : '收起菜单'}</span></button>
       </aside>
+      {mobileOpen && <button className="sidebar-mask" onClick={() => setMobileOpen(false)} aria-label="关闭菜单" />}
       <main className="main-panel">
         <header className="topbar">
           <label className="top-search">
