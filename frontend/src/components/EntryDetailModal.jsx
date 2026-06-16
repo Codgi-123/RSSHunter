@@ -1,5 +1,6 @@
 import { formatDateTime } from '../utils/format';
 import Modal from './Modal';
+import SummaryContent from './SummaryContent';
 
 export default function EntryDetailModal({ entry, onClose }) {
   if (!entry) return null;
@@ -14,7 +15,7 @@ export default function EntryDetailModal({ entry, onClose }) {
         <dt>发布时间</dt>
         <dd>{formatDateTime(entry.published_at)}</dd>
         <dt>摘要</dt>
-        <dd>{entry.summary || '-'}</dd>
+        <dd><SummaryContent value={entry.summary} /></dd>
         <dt>原文链接</dt>
         <dd>{entry.link ? <a href={entry.link} target="_blank" rel="noreferrer">{entry.link}</a> : '-'}</dd>
       </dl>

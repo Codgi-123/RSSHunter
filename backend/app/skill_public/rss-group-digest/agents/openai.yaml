@@ -1,0 +1,4 @@
+interface:
+  display_name: "ProductHunter Update Report"
+  short_description: "配置订阅组或全局动态报告交接"
+  default_prompt: "Use $rss-group-digest to configure a recurring update report for my ProductHunter subscription group or global dynamics."

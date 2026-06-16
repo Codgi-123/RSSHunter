@@ -1,4 +1,4 @@
-# RSSHunter
+# ProductHunter
 
 数据库动态 RSS 管理平台，使用 FastAPI + SQLite + React + Tailwind CSS 实现，支持 RSS 订阅源、订阅组、动态条目、日历视图、源状态与结构化 API 查询。
 

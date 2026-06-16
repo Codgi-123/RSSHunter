@@ -1,8 +1,9 @@
-import { AlertTriangle, Download, Edit3, Eye, PauseCircle, Plus, RefreshCw, Rss, Search, ShieldCheck, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, ChevronsUpDown, Download, Edit3, Eye, PauseCircle, Plus, RefreshCw, Rss, Search, ShieldCheck, Trash2, Upload } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import ActionDialog from '../components/ActionDialog';
 import CopyButton from '../components/CopyButton';
+import { ClearableInput, ClearableSelect } from '../components/FilterControls';
 import { PageTitle } from '../components/Layout';
 import MetricCard from '../components/MetricCard';
 import Modal from '../components/Modal';
@@ -197,11 +198,11 @@ export default function FeedsPage({ feeds, reloadFeeds, setPage, setSelectedFeed
       <section className="toolbar-panel">
         <button className="primary-button" onClick={openCreate}><Plus size={18} />新增订阅</button>
         <button onClick={() => setBulkOpen(true)}><Upload size={17} />批量导入</button>
-        <label className="filter-search"><input value={filters.keyword} onChange={(event) => updateFilter('keyword', event.target.value)} placeholder="搜索订阅名称、厂商、产品或 URL" /><Search size={18} /></label>
-        <select value={filters.vendor} onChange={(event) => updateFilter('vendor', event.target.value)}><option value="">厂商</option>{vendors.map((item) => <option key={item}>{item}</option>)}</select>
-        <select value={filters.product} onChange={(event) => updateFilter('product', event.target.value)}><option value="">产品</option>{products.map((item) => <option key={item}>{item}</option>)}</select>
-        <select value={filters.db_type} onChange={(event) => updateFilter('db_type', event.target.value)}><option value="">数据库类型</option>{dbTypes.map((item) => <option key={item}>{item}</option>)}</select>
-        <select value={filters.status} onChange={(event) => updateFilter('status', event.target.value)}><option value="">状态</option><option value="normal">正常</option><option value="fetch_failed">抓取失败</option><option value="parse_error">解析异常</option></select>
+        <ClearableInput className="filter-search" value={filters.keyword} onChange={(value) => updateFilter('keyword', value)} placeholder="搜索订阅名称、厂商、产品或 URL" label="订阅搜索" icon={<Search size={18} />} />
+        <ClearableSelect value={filters.vendor} onChange={(value) => updateFilter('vendor', value)} label="厂商"><option value="">厂商</option>{vendors.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
+        <ClearableSelect value={filters.product} onChange={(value) => updateFilter('product', value)} label="产品"><option value="">产品</option>{products.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
+        <ClearableSelect value={filters.db_type} onChange={(value) => updateFilter('db_type', value)} label="数据库类型"><option value="">数据库类型</option>{dbTypes.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
+        <ClearableSelect value={filters.status} onChange={(value) => updateFilter('status', value)} label="状态"><option value="">状态</option><option value="normal">正常</option><option value="fetch_failed">抓取失败</option><option value="parse_error">解析异常</option></ClearableSelect>
         <button onClick={() => { setLocalPage(1); setFilters({ keyword: '', vendor: '', product: '', db_type: '', status: '' }); }}><RefreshCw size={16} />重置筛选</button>
       </section>
 
@@ -212,7 +213,7 @@ export default function FeedsPage({ feeds, reloadFeeds, setPage, setSelectedFeed
         {message && <div className="inline-status"><span>{message}</span><button onClick={() => setMessage('')}>关闭</button></div>}
         <div className="table-wrap">
           <table className="data-table">
-            <thead><tr><th><button className="table-sort-button" onClick={() => updateSort('name')}>订阅名称{sort.key === 'name' ? (sort.direction === 'asc' ? ' ↑' : ' ↓') : ''}</button></th><th><button className="table-sort-button" onClick={() => updateSort('vendor')}>厂商{sort.key === 'vendor' ? (sort.direction === 'asc' ? ' ↑' : ' ↓') : ''}</button></th><th><button className="table-sort-button" onClick={() => updateSort('product')}>产品{sort.key === 'product' ? (sort.direction === 'asc' ? ' ↑' : ' ↓') : ''}</button></th><th>数据库类型</th><th>标签</th><th>RSS URL</th><th>最近更新时间</th><th>最近抓取时间</th><th>状态</th><th>所属订阅组</th><th>操作</th></tr></thead>
+            <thead><tr><th><button className="table-sort-button" onClick={() => updateSort('name')}>订阅名称 {sort.key === 'name' ? (sort.direction === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />) : <ChevronsUpDown size={13} style={{ opacity: 0.4 }} />}</button></th><th><button className="table-sort-button" onClick={() => updateSort('vendor')}>厂商 {sort.key === 'vendor' ? (sort.direction === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />) : <ChevronsUpDown size={13} style={{ opacity: 0.4 }} />}</button></th><th><button className="table-sort-button" onClick={() => updateSort('product')}>产品 {sort.key === 'product' ? (sort.direction === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />) : <ChevronsUpDown size={13} style={{ opacity: 0.4 }} />}</button></th><th>数据库类型</th><th>标签</th><th>RSS URL</th><th>最近更新时间</th><th>状态</th><th>操作</th></tr></thead>
             <tbody>
               {!listLoading && pagedItems.map((feed) => (
                 <tr key={feed.id}>
@@ -223,9 +224,7 @@ export default function FeedsPage({ feeds, reloadFeeds, setPage, setSelectedFeed
                   <td><TagList tags={feed.tags} /></td>
                   <td className="url-cell"><div className="url-cell-inner"><span>{feed.rss_url}</span><CopyButton text={feed.rss_url} /></div></td>
                   <td>{formatDateTime(feed.latest_item_published_at)}</td>
-                  <td>{formatDateTime(feed.last_fetched_at)}</td>
                   <td><StatusPill status={feed.status} enabled={feed.enabled} /></td>
-                  <td>{feed.groups || '-'}</td>
                   <td className="row-actions action-cell">
                     <ActionDialog
                       title={feed.name}
@@ -239,8 +238,8 @@ export default function FeedsPage({ feeds, reloadFeeds, setPage, setSelectedFeed
                   </td>
                 </tr>
               ))}
-              {listLoading && <tr><td colSpan="11" className="empty-cell">正在加载订阅源...</td></tr>}
-              {!listLoading && !items.length && <tr><td colSpan="11" className="empty-cell">暂无订阅源</td></tr>}
+              {listLoading && <tr><td colSpan="9" className="empty-cell"><span className="loading-label">正在加载订阅源...</span></td></tr>}
+              {!listLoading && !items.length && <tr><td colSpan="9" className="empty-cell">暂无订阅源</td></tr>}
             </tbody>
           </table>
         </div>

@@ -5,7 +5,9 @@ import CalendarGrid from '../components/CalendarGrid';
 import CopyButton from '../components/CopyButton';
 import EntryDetailModal from '../components/EntryDetailModal';
 import EntryTable from '../components/EntryTable';
+import { ClearableInput } from '../components/FilterControls';
 import { PageTitle } from '../components/Layout';
+import LoadingState from '../components/LoadingState';
 import Pagination, { getPageItems } from '../components/Pagination';
 import StatusPill from '../components/StatusPill';
 import TagList from '../components/TagList';
@@ -80,7 +82,7 @@ export default function FeedDetailPage({ feedId, setPage }) {
     return () => { active = false; };
   }, [feedId, view, month]);
 
-  if (loading) return <><PageTitle title="订阅详情" subtitle="正在加载订阅源信息..." /><section className="panel state-panel">正在加载订阅源...</section></>;
+  if (loading) return <><PageTitle title="订阅详情" subtitle="正在加载订阅源信息..." /><LoadingState title="正在加载订阅源..." rows={4} /></>;
   if (!feed) return <><PageTitle title="订阅详情" subtitle="无法加载订阅源信息" actions={<button onClick={load}><RefreshCw size={17} />重试</button>} />{error && <div className="form-error">{error}</div>}</>;
 
   return (
@@ -95,7 +97,7 @@ export default function FeedDetailPage({ feedId, setPage }) {
         </div>
       </section>
       <section className="panel">
-        <div className="tabs"><button className={view === 'list' ? 'active' : ''} onClick={() => { setDayItems(null); setView('list'); }}>条目列表</button><button className={view === 'calendar' ? 'active' : ''} onClick={() => { setDayItems(null); setView('calendar'); }}><CalendarDays size={16} />日历视图</button><input value={keyword} onChange={(event) => { setLocalPage(1); setKeyword(event.target.value); }} placeholder="搜索标题或摘要" /></div>
+        <div className="tabs"><button className={view === 'list' ? 'active' : ''} onClick={() => { setDayItems(null); setView('list'); }}>条目列表</button><button className={view === 'calendar' ? 'active' : ''} onClick={() => { setDayItems(null); setView('calendar'); }}><CalendarDays size={16} />日历视图</button><ClearableInput className="tabs-search" value={keyword} onChange={(value) => { setLocalPage(1); setKeyword(value); }} placeholder="搜索标题或摘要" label="订阅动态搜索" /></div>
         {view === 'list' ? <><EntryTable entries={entries.items} onDetail={setDetail} /><Pagination total={entries.total} page={page} pageSize={pageSize} onPageChange={setLocalPage} onPageSizeChange={(size) => { setPageSize(size); setLocalPage(1); }} /></> : <div className="calendar-layout"><CalendarGrid days={calendar} month={month} onMonthChange={(value) => { setDayItems(null); setMonth(value); }} onDayClick={setDayItems} />{dayItems && <DayEntriesPanel dayItems={dayItems} onClose={() => setDayItems(null)} onDetail={setDetail} />}</div>}
       </section>
       <EntryDetailModal entry={detail} onClose={() => setDetail(null)} />

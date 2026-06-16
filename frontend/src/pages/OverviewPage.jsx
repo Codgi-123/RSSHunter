@@ -1,4 +1,4 @@
-import { AlertTriangle, Eye, FileText, RefreshCw, Rss, Users } from 'lucide-react';
+import { AlertTriangle, Database, Eye, FileText, Folder, Layers, RefreshCw, Rss, Server, Share2, Users } from 'lucide-react';
 import { useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '../api';
@@ -19,6 +19,8 @@ function normalizeTrend(rows = []) {
     return { date: key.slice(5), count: map[key] || 0 };
   });
 }
+
+const groupIcons = [Database, Layers, Server, Share2, Folder];
 
 export default function OverviewPage({ overview, reloadOverview, setPage, setSelectedFeed, setSelectedGroup }) {
   const [recentPage, setRecentPage] = useState(1);
@@ -63,10 +65,10 @@ export default function OverviewPage({ overview, reloadOverview, setPage, setSel
       <PageTitle title="首页概览" subtitle="快速查看 RSS 平台整体状态、最新动态与异常订阅源" />
       {message && <div className="inline-status"><span>{message}</span><button onClick={() => setMessage('')}>关闭</button></div>}
       <section className="metric-grid">
-        <MetricCard icon={FileText} label="今日新增动态" value={stats.today_entries ?? 0} delta="较昨日 +18.7% ↑" hint="今日新增的动态条目总数" onClick={() => setPage('entries')} />
-        <MetricCard icon={Rss} label="订阅源总数" value={stats.feed_count ?? 0} tone="green" delta="较昨日 +3 ↑" hint="当前已配置的 RSS 订阅源总数" onClick={() => setPage('feeds')} />
-        <MetricCard icon={Users} label="订阅组总数" value={stats.group_count ?? 0} tone="purple" delta="较昨日 +1 ↑" hint="当前已创建的订阅组总数" onClick={() => setPage('groups')} />
-        <MetricCard icon={AlertTriangle} label="异常订阅源" value={stats.abnormal_count ?? 0} tone="red" delta="较昨日 -2 ↓" hint="当前存在异常的订阅源数量" onClick={() => setPage('status')} />
+        <MetricCard icon={FileText} label="今日新增动态" value={stats.today_entries ?? 0} hint="今日新增的动态条目总数" onClick={() => setPage('entries')} />
+        <MetricCard icon={Rss} label="订阅源总数" value={stats.feed_count ?? 0} tone="green" hint="当前已配置的 RSS 订阅源总数" onClick={() => setPage('feeds')} />
+        <MetricCard icon={Users} label="订阅组总数" value={stats.group_count ?? 0} tone="purple" hint="当前已创建的订阅组总数" onClick={() => setPage('groups')} />
+        <MetricCard icon={AlertTriangle} label="异常订阅源" value={stats.abnormal_count ?? 0} tone="red" hint="当前存在异常的订阅源数量" onClick={() => setPage('status')} />
       </section>
 
       <section className="content-split">
@@ -105,16 +107,19 @@ export default function OverviewPage({ overview, reloadOverview, setPage, setSel
       <section className="panel">
         <div className="panel-header"><h2>常用订阅组</h2><button className="link-button" onClick={() => setPage('groups')}>管理订阅组</button></div>
         <div className="quick-group-grid">
-          {(overview.groups || []).map((group, index) => (
-            <article className="quick-group-card" key={group.id}>
-              <div className={`symbol-card color-${index % 5}`}>{['▰', '◆', '♜', '✣', '◒'][index % 5]}</div>
-              <button className="card-title-link" onClick={() => openGroup(group)}>{group.name}</button>
-              <p><span>包含订阅数</span><b>{group.feed_count || 0}</b></p>
-              <p><span>今日新增</span><b>{group.today_new || 0}</b></p>
-              <p><span>最近更新时间</span><b>{formatDateTime(group.latest_update)}</b></p>
-              <button onClick={() => openGroup(group)}>查看详情</button>
-            </article>
-          ))}
+          {(overview.groups || []).map((group, index) => {
+            const GroupIcon = groupIcons[index % groupIcons.length];
+            return (
+              <article className="quick-group-card" key={group.id} onClick={() => openGroup(group)} style={{ cursor: 'pointer' }}>
+                <div className={`symbol-card color-${index % 5}`}><GroupIcon size={24} /></div>
+                <button className="card-title-link" onClick={(e) => { e.stopPropagation(); openGroup(group); }}>{group.name}</button>
+                <span className="entity-id">ID {group.id}</span>
+                <p><span>包含订阅数</span><b>{group.feed_count || 0}</b></p>
+                <p><span>今日新增</span><b>{group.today_new || 0}</b></p>
+                <p><span>最近更新时间</span><b>{formatDateTime(group.latest_update)}</b></p>
+              </article>
+            );
+          })}
         </div>
       </section>
 

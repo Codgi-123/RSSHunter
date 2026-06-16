@@ -36,11 +36,12 @@ export default function TagInput({ value = [], onChange, placeholder = '输入�
       {tags.map((tag) => (
         <span className="tag-chip editable" key={tag}>
           {tag}
-          <button type="button" className="tag-remove" onClick={() => remove(tag)}><X size={13} /></button>
+          <button type="button" className="tag-remove" aria-label={`移除标签 ${tag}`} onClick={() => remove(tag)}><X size={13} /></button>
         </span>
       ))}
       <input
         className="tag-input-field"
+        aria-label="标签输入"
         value={draft}
         placeholder={tags.length ? '' : placeholder}
         onChange={(event) => setDraft(event.target.value)}

@@ -1,5 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 import { formatDateTime } from '../utils/format';
+import SummaryContent from './SummaryContent';
 import VendorBadge from './VendorBadge';
 
 export default function EntryTable({ entries = [], compact = false, onDetail }) {
@@ -26,7 +27,7 @@ export default function EntryTable({ entries = [], compact = false, onDetail }) 
               {!compact && <td><VendorBadge vendor={entry.vendor} /></td>}
               {!compact && <td>{entry.product}</td>}
               <td>{formatDateTime(entry.published_at)}</td>
-              <td className="summary-cell">{entry.summary || '-'}</td>
+              <td className="summary-cell"><SummaryContent value={entry.summary} compact /></td>
               <td>{entry.link ? <a href={entry.link} target="_blank" rel="noreferrer">查看原文 <ExternalLink size={14} /></a> : '-'}</td>
               <td><button className="outline-mini" onClick={() => onDetail?.(entry)} disabled={!onDetail}>详情</button></td>
             </tr>

@@ -3,12 +3,17 @@ import { useEffect, useRef } from 'react';
 
 export default function Modal({ title, children, onClose, footer }) {
   const cardRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     const previous = document.activeElement;
 
     function closeOnEscape(event) {
-      if (event.key === 'Escape') onClose?.();
+      if (event.key === 'Escape') onCloseRef.current?.();
     }
 
     document.addEventListener('keydown', closeOnEscape);
@@ -17,11 +22,27 @@ export default function Modal({ title, children, onClose, footer }) {
       document.removeEventListener('keydown', closeOnEscape);
       previous?.focus?.();
     };
-  }, [onClose]);
+  }, []);
+
+  function trapFocus(event) {
+    if (event.key !== 'Tab' || !cardRef.current) return;
+    const focusable = Array.from(cardRef.current.querySelectorAll('button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])'))
+      .filter((item) => !item.disabled && item.getAttribute('aria-hidden') !== 'true');
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
 
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title" ref={cardRef} onMouseDown={(event) => event.stopPropagation()}>
+      <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title" ref={cardRef} onKeyDown={trapFocus} onMouseDown={(event) => event.stopPropagation()}>
         <header className="modal-header">
           <h2 id="modal-title">{title}</h2>
           <button className="icon-button" onClick={onClose} aria-label="关闭"><X size={18} /></button>

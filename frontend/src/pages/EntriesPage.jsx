@@ -5,12 +5,14 @@ import CalendarGrid from '../components/CalendarGrid';
 import DateRangeFilter from '../components/DateRangeFilter';
 import EntryDetailModal from '../components/EntryDetailModal';
 import EntryTable from '../components/EntryTable';
+import { ClearableInput, ClearableSelect } from '../components/FilterControls';
 import { PageTitle } from '../components/Layout';
+import LoadingState from '../components/LoadingState';
 import Pagination, { getPageItems } from '../components/Pagination';
 import { unique } from '../utils/format';
 
-export default function EntriesPage({ feeds, groups, initialKeyword = '' }) {
-  const [filters, setFilters] = useState({ keyword: initialKeyword, vendor: '', product: '', db_type: '', feed_id: '', group_id: '', start: '', end: '' });
+export default function EntriesPage({ feeds, initialKeyword = '' }) {
+  const [filters, setFilters] = useState({ keyword: initialKeyword, vendor: '', product: '', db_type: '', start: '', end: '' });
   const [entries, setEntries] = useState({ total: 0, items: [] });
   const [calendar, setCalendar] = useState([]);
   const [view, setView] = useState('list');
@@ -77,17 +79,17 @@ export default function EntriesPage({ feeds, groups, initialKeyword = '' }) {
   const resetFilters = () => {
     setPage(1);
     setDayItems(null);
-    setFilters({ keyword: '', vendor: '', product: '', db_type: '', feed_id: '', group_id: '', start: '', end: '' });
+    setFilters({ keyword: '', vendor: '', product: '', db_type: '', start: '', end: '' });
   };
 
   return (
     <>
-      <PageTitle title="全局动态" subtitle="查看平台内所有 RSS 条目，支持关键词、时间、厂商、产品、订阅源和订阅组筛选" />
-      <section className="panel">
-        <div className="tabs"><button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}><List size={16} />全部条目</button><button className={view === 'calendar' ? 'active' : ''} onClick={() => { setDayItems(null); setView('calendar'); }}><CalendarDays size={16} />全局日历</button><label><input value={filters.keyword} onChange={(event) => update('keyword', event.target.value)} placeholder="搜索标题和摘要" /><Search size={16} /></label></div>
-        <div className="filter-bar entries-filter-bar"><DateRangeFilter start={filters.start} end={filters.end} onChange={update} /><select value={filters.vendor} onChange={(event) => update('vendor', event.target.value)}><option value="">厂商</option>{vendors.map((item) => <option key={item}>{item}</option>)}</select><select value={filters.product} onChange={(event) => update('product', event.target.value)}><option value="">产品</option>{products.map((item) => <option key={item}>{item}</option>)}</select><select value={filters.db_type} onChange={(event) => update('db_type', event.target.value)}><option value="">数据库类型</option>{dbTypes.map((item) => <option key={item}>{item}</option>)}</select><select value={filters.feed_id} onChange={(event) => update('feed_id', event.target.value)}><option value="">订阅源</option>{feeds.map((feed) => <option key={feed.id} value={feed.id}>{feed.name}</option>)}</select><select value={filters.group_id} onChange={(event) => update('group_id', event.target.value)}><option value="">订阅组</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select><button type="button" onClick={resetFilters}>重置筛选</button></div>
+      <PageTitle title="全局动态" subtitle="查看平台内所有 RSS 条目，支持关键词、日期、厂商、产品和数据库类型筛选" />
+      <section className="panel filterable-panel">
+        <div className="tabs"><button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}><List size={16} />全部条目</button><button className={view === 'calendar' ? 'active' : ''} onClick={() => { setDayItems(null); setView('calendar'); }}><CalendarDays size={16} />全局日历</button><ClearableInput className="tabs-search" value={filters.keyword} onChange={(value) => update('keyword', value)} placeholder="搜索标题和摘要" label="动态搜索" icon={<Search size={16} />} /></div>
+        <div className="filter-bar entries-filter-bar"><DateRangeFilter start={filters.start} end={filters.end} onChange={update} /><ClearableSelect value={filters.vendor} onChange={(value) => update('vendor', value)} label="厂商"><option value="">厂商</option>{vendors.map((item) => <option key={item}>{item}</option>)}</ClearableSelect><ClearableSelect value={filters.product} onChange={(value) => update('product', value)} label="产品"><option value="">产品</option>{products.map((item) => <option key={item}>{item}</option>)}</ClearableSelect><ClearableSelect value={filters.db_type} onChange={(value) => update('db_type', value)} label="数据库类型"><option value="">数据库类型</option>{dbTypes.map((item) => <option key={item}>{item}</option>)}</ClearableSelect><button type="button" onClick={resetFilters}>重置筛选</button></div>
         {error && <div className="form-error">{error}</div>}
-        {view === 'list' ? <>{loading ? <section className="panel state-panel compact-state">正在加载动态...</section> : <EntryTable entries={entries.items} onDetail={setDetail} />}<Pagination total={entries.total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} /></> : <div className="calendar-layout"><div>{calendarLoading && <div className="inline-loading">正在加载日历...</div>}<CalendarGrid days={calendar} month={month} onMonthChange={(value) => { setDayItems(null); setMonth(value); }} onDayClick={setDayItems} /></div>{dayItems && <DayEntriesPanel dayItems={dayItems} onClose={() => setDayItems(null)} onDetail={setDetail} />}</div>}
+        {view === 'list' ? <>{loading ? <LoadingState title="正在加载动态..." rows={3} compact /> : <EntryTable entries={entries.items} onDetail={setDetail} />}<Pagination total={entries.total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} /></> : <div className="calendar-layout"><div>{calendarLoading && <div className="inline-loading" role="status" aria-live="polite">正在加载日历...</div>}<CalendarGrid days={calendar} month={month} onMonthChange={(value) => { setDayItems(null); setMonth(value); }} onDayClick={setDayItems} /></div>{dayItems && <DayEntriesPanel dayItems={dayItems} onClose={() => setDayItems(null)} onDetail={setDetail} />}</div>}
       </section>
       <EntryDetailModal entry={detail} onClose={() => setDetail(null)} />
     </>

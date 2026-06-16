@@ -1,13 +1,15 @@
-const vendorStyles = {
-  腾讯云: ['腾', 'vendor-tencent'],
-  阿里云: ['阿', 'vendor-aliyun'],
-  AWS: ['AWS', 'vendor-aws'],
-  PostgreSQL: ['PG', 'vendor-postgres'],
-  Redis: ['R', 'vendor-redis'],
-  MongoDB: ['M', 'vendor-mongo'],
-};
+import { Database } from 'lucide-react';
+import { vendorLogos } from '../data/vendorLogos';
 
 export default function VendorBadge({ vendor = '' }) {
-  const [abbr, tone] = vendorStyles[vendor] || [vendor.slice(0, 2).toUpperCase() || '-', 'vendor-default'];
-  return <span className={`vendor-badge ${tone}`}><i>{abbr}</i>{vendor || '-'}</span>;
+  const logo = vendorLogos[vendor];
+
+  return (
+    <span className={`vendor-badge ${logo ? 'has-logo' : 'is-fallback'}`} title={vendor || '-'}>
+      <span className="vendor-logo" aria-hidden="true">
+        {logo ? <img src={logo.src} alt="" /> : <Database size={16} />}
+      </span>
+      <span className="vendor-name">{vendor || '-'}</span>
+    </span>
+  );
 }

@@ -1,0 +1,17 @@
+:4000 {
+	encode gzip zstd
+
+	handle /api/* {
+		reverse_proxy backend:9000 {
+			header_up Host {http.request.host}
+			header_up X-Forwarded-Port 4000
+			header_up X-Real-IP {http.request.remote.host}
+		}
+	}
+
+	handle {
+		root * /usr/share/caddy
+		try_files {path} /index.html
+		file_server
+	}
+}

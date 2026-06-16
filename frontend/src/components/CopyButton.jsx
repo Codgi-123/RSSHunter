@@ -53,5 +53,5 @@ export default function CopyButton({ text, label = '复制' }) {
   const icon = status === 'copied' ? <Check size={14} /> : status === 'failed' ? <AlertTriangle size={14} /> : <Copy size={14} />;
   const title = status === 'copied' ? '已复制' : status === 'failed' ? '复制失败' : label;
 
-  return <button className={`copy-button ${status === 'failed' ? 'copy-failed' : ''}`} type="button" onClick={copyText} disabled={!text}>{icon}{title}</button>;
+  return <button className={`copy-button ${status === 'failed' ? 'copy-failed' : ''}`} type="button" aria-label={title} aria-live="polite" onClick={copyText} disabled={!text}>{icon}{title}</button>;
 }

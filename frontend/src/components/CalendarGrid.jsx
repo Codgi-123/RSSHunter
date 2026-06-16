@@ -1,5 +1,5 @@
-import { CalendarDays } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import MonthPicker from './MonthPicker';
 import { formatDate } from '../utils/format';
 
 function monthCells(month) {
@@ -41,8 +41,8 @@ export default function CalendarGrid({ days = [], month, onMonthChange, onDayCli
       <div className="panel-header calendar-header">
         <h2>日历视图</h2>
         <div className="calendar-tools">
-          <div className="segmented-control"><button className={mode === 'day' ? 'active' : ''} onClick={() => setMode('day')}>按天</button><button className={mode === 'month' ? 'active' : ''} onClick={() => setMode('month')}>按月</button></div>
-          <label className="month-picker"><CalendarDays size={16} /><input type="month" value={activeMonth} onChange={(event) => onMonthChange?.(event.target.value)} /></label>
+          <div className="segmented-control" role="group" aria-label="日历粒度"><button type="button" className={mode === 'day' ? 'active' : ''} aria-pressed={mode === 'day'} onClick={() => setMode('day')}>按天</button><button type="button" className={mode === 'month' ? 'active' : ''} aria-pressed={mode === 'month'} onClick={() => setMode('month')}>按月</button></div>
+          <MonthPicker value={activeMonth} onChange={onMonthChange} />
         </div>
       </div>
       {mode === 'day' ? <DayGrid activeMonth={activeMonth} dayMap={dayMap} max={max} onDayClick={onDayClick} /> : <MonthGrid year={activeYear} monthMap={monthMap} onMonthChange={onMonthChange} onDayClick={onDayClick} />}
@@ -61,9 +61,9 @@ function DayGrid({ activeMonth, dayMap, max, onDayClick }) {
           const muted = key.slice(0, 7) !== activeMonth;
           const disabled = muted || !data;
           return (
-            <button key={key} disabled={disabled} className={`calendar-cell ${muted ? 'muted' : ''} ${disabled ? 'disabled' : ''}`} onClick={() => data && onDayClick?.(data)}>
+            <button key={key} type="button" disabled={disabled} aria-label={`${key}，${data?.count || 0} 条动态`} className={`calendar-cell ${muted ? 'muted' : ''} ${disabled ? 'disabled' : ''}`} onClick={() => data && onDayClick?.(data)}>
               <b>{date.getDate()}</b>
-              {data && <em style={{ height: 22 + ((data.count || 0) / max) * 56 }}>{data.count}</em>}
+              {data && data.count > 0 && <em style={{ height: 22 + (data.count / max) * 56 }}>{data.count >= 100 ? '99+' : data.count}</em>}
               <small>{data?.items?.[0]?.title || formatDate(key)}</small>
             </button>
           );
@@ -80,7 +80,7 @@ function MonthGrid({ year, monthMap, onMonthChange, onDayClick }) {
         const month = `${year}-${String(index + 1).padStart(2, '0')}`;
         const data = monthMap.get(month);
         return (
-          <button key={month} disabled={!data} className={`month-cell ${!data ? 'disabled' : ''}`} onClick={() => { onMonthChange?.(month); onDayClick?.({ ...data, date: `${month} 月` }); }}>
+          <button key={month} type="button" disabled={!data} aria-label={`${month}，${data?.count || 0} 条动态`} className={`month-cell ${!data ? 'disabled' : ''}`} onClick={() => { onMonthChange?.(month); onDayClick?.({ ...data, date: `${month} 月` }); }}>
             <b>{index + 1} 月</b>
             <span>{data ? `${data.count} 条动态` : '暂无动态'}</span>
             <small>{data?.items?.[0]?.title || `${year} 年 ${index + 1} 月`}</small>
