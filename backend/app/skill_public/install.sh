@@ -9,7 +9,22 @@ if [[ -n "${PRODUCTHUNTER_SKILL_ROOT:-}" ]]; then
 else
   SKILLS_DIR="${PRODUCTHUNTER_SKILLS_DIR:-${AGENT_SKILLS_DIR:-}}"
   if [[ -z "$SKILLS_DIR" ]]; then
-    SKILLS_DIR="${CODEX_HOME:-$HOME/.codex}/skills"
+    if [[ -n "${CLAUDE_SKILLS_DIR:-}" ]]; then
+      SKILLS_DIR="$CLAUDE_SKILLS_DIR"
+    elif [[ -d "$HOME/.claude" ]]; then
+      SKILLS_DIR="$HOME/.claude/skills"
+    elif [[ -n "${CODEX_HOME:-}" ]]; then
+      SKILLS_DIR="$CODEX_HOME/skills"
+    elif [[ -d "$HOME/.codex" ]]; then
+      SKILLS_DIR="$HOME/.codex/skills"
+    else
+      echo "无法自动检测 Skill 安装目录，请手动指定："
+      read -rp "Skill 安装目录: " SKILLS_DIR
+      if [[ -z "$SKILLS_DIR" ]]; then
+        echo "错误：未指定安装目录" >&2
+        exit 1
+      fi
+    fi
   fi
   SKILL_ROOT="${SKILLS_DIR%/}/${SKILL_NAME}"
 fi

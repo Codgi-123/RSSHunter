@@ -1,6 +1,6 @@
 ---
 name: rss-group-digest
-description: "Configure reusable recurring update reports for ProductHunter-compatible RSS subscription groups or global dynamics, including weekly digests, custom report intervals, and date-filtered global reports. Use when a user asks to set up, update, or hand off a subscription group digest, global dynamics report, weekly report, RSS group report, ProductHunter report, or agent-run summary workflow. The skill guides report-scope selection, group discovery, date filtering, cadence setup, preview generation, external-agent configuration, API fetch contracts for a date window, and prompts that summarize updates into overview, AI-selected highlights, and detailed item lists."
+description: "Set up a recurring RSS subscription group or global dynamics digest report, including cadence, date filters, preview, and upstream agent handoff config."
 ---
 
 # ProductHunter Update Report
@@ -94,7 +94,7 @@ Keep responsibilities clear:
    - If sample entries are available, fetch a small historical window and confirm the prompt can consume the response shape.
    - Do not promise live scheduling, background jobs, or push delivery from this skill.
 
-8. Generate or update a configuration object. Use `references/config-schema.md` for canonical fields, defaults, and API call examples. Save the final config as `config.json` inside the skill directory (`rss-group-digest/config.json`). Do not ask the user where to save it.
+8. Generate or update a configuration object. Use `references/config-schema.md` for canonical fields, defaults, and API call examples. Save the final config as `config.json` inside the skill directory. Do not ask the user where to save it.
 
 9. Select prompts:
    - Use `references/prompt-templates.md` for the update report system prompt, user prompt, empty report, highlight selection rules, and upstream agent handoff prompt.
@@ -136,4 +136,4 @@ Use `published_at` as the primary content time. Fall back to `created_at` only w
 
 ## Agent Compatibility
 
-This skill is model-agnostic. Agents that support `$rss-group-digest` can invoke it directly. Other agents should load this `SKILL.md` first, then read only the relevant files in `references/` for conversation flow, configuration schema, or prompt templates.
+This skill is model-agnostic. Agents that support `$rss-group-digest` can invoke it directly. Other agents should load this `SKILL.md` first, then read the relevant reference files for conversation flow, configuration schema, or prompt templates.
