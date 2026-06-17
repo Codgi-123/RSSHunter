@@ -82,7 +82,7 @@ For global dynamics, use `target.scope=global`, set `group` to `null`, and inclu
 
 必须输出以下三部分，缺少任何一部分视为不完整输出：
 1. 总结：2-4 条，说明本周期更新数量、主要产品、整体判断。
-2. 重点信息：最多 5 条，优先选安全、破坏性变更、价格变化、重要新功能，每条附来源链接。
+2. 重点信息：最多 5 条，优先选重要新功能、缺陷修复、价格变化、新特性，每条附来源链接。
 3. 详细列表：列出本周期所有输入条目，用 Markdown 表格输出，列为日期、产品/来源、更新内容（一句话摘要）、原始链接，按日期升序排列。链接列用 `[查看原文]({link})` 格式，无链接时写”—“。不得省略或截断。
 ```
 
@@ -150,17 +150,16 @@ URL 门禁：
 6. 用 state.dedupe_keys 和上层 agent 的状态存储过滤重复条目。
 7. 使用 Update Report Summarizer prompt 生成报告。
 8. 校验报告包含总结、重点信息、详细列表三部分。
-9. 如果 feishu.enabled=true 且 dry_run=false，将报告写入飞书文档（无需额外凭证，使用 agent 已有的飞书访问权限）：
+9. 如果 feishu.enabled=true，将报告写入飞书文档：
    a. report_date = 报告窗口最后一天（YYYY-MM-DD，UTC+8）
    b. month = report_date.month
    c. monday_of_week = report_date 所在 ISO 周的周一（UTC+8）
    d. week_of_month = ceil(monday_of_week.day / 7)
    e. folder_path = "{root_folder_name}/M{month}/W{week_of_month}"
    f. doc_title = "【{report_date}】{target_label} 市场动态报告"
-   g. 按路径逐级创建文件夹（已存在则直接使用）
-   h. 在目标文件夹下创建或更新文档，写入报告正文
-   i. 记录文档 URL 到运行状态
+   g. 存储路径在用户的云盘下，按路径逐级创建文件夹（已存在则直接使用）
+   i. 在目标文件夹下创建文档，写入报告正文
+   j. 记录文档 URL 到运行状态
 10. 写入上层 agent 的运行状态和 seen_entry_ids。
-11. dry_run=true 时只生成预览，不发送，不写飞书。
-12. 失败时由上层 agent 记录错误、重试并处理通知。
+11. 失败时由上层 agent 记录错误、重试并处理通知。
 ```
