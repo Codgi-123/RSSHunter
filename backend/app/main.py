@@ -88,18 +88,14 @@ def init_db():
 TENCENT_VECTOR_RSS_URL = "https://rsshub.codgi.xin/tencent/cloud/document/product-updates/向量数据库"
 
 AWS_DATABASE_FEEDS = [
-    ("Amazon Aurora 动态", "https://aws.amazon.com/blogs/database/category/database/amazon-aurora/feed/", "AWS", "Amazon Aurora", "关系型", "AWS,Amazon Aurora,关系型", "AWS Amazon Aurora 数据库博客 RSS"),
-    ("Amazon DynamoDB 动态", "https://aws.amazon.com/blogs/database/category/database/amazon-dynamodb/feed/", "AWS", "Amazon DynamoDB", "键值数据库", "AWS,Amazon DynamoDB,键值数据库", "AWS Amazon DynamoDB 数据库博客 RSS"),
-    ("Amazon ElastiCache 动态", "https://aws.amazon.com/blogs/database/category/database/amazon-elasticache/feed/", "AWS", "Amazon ElastiCache", "缓存", "AWS,Amazon ElastiCache,缓存", "AWS Amazon ElastiCache 数据库博客 RSS"),
-    ("Amazon MemoryDB 动态", "https://aws.amazon.com/blogs/database/category/database/amazon-memorydb/feed/", "AWS", "Amazon MemoryDB", "缓存", "AWS,Amazon MemoryDB,缓存", "AWS Amazon MemoryDB 数据库博客 RSS"),
+    ("Amazon Aurora 动态", "https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/auroraupdates.rss", "AWS", "Amazon Aurora", "关系型", "AWS,Amazon Aurora,关系型", "AWS Amazon Aurora 官方文档更新 RSS"),
+    ("Amazon DynamoDB 动态", "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/dynamodbupdates.rss", "AWS", "Amazon DynamoDB", "键值数据库", "AWS,Amazon DynamoDB,键值数据库", "AWS Amazon DynamoDB 官方文档更新 RSS"),
+    ("Amazon ElastiCache (Valkey/Redis OSS) 动态", "https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/amazon-elcr-release-notes.rss", "AWS", "Amazon ElastiCache (Valkey/Redis OSS)", "缓存", "AWS,Amazon ElastiCache,Valkey,Redis,缓存", "AWS Amazon ElastiCache for Valkey / Redis OSS 官方文档更新 RSS"),
     ("Amazon DocumentDB 动态", "https://aws.amazon.com/blogs/database/category/database/amazon-document-db/feed/", "AWS", "Amazon DocumentDB", "文档数据库", "AWS,Amazon DocumentDB,文档数据库", "AWS Amazon DocumentDB 数据库博客 RSS"),
-    ("Amazon Neptune 动态", "https://aws.amazon.com/blogs/database/category/database/amazon-neptune/feed/", "AWS", "Amazon Neptune", "图数据库", "AWS,Amazon Neptune,图数据库", "AWS Amazon Neptune 数据库博客 RSS"),
+    ("Amazon Neptune 动态", "https://docs.aws.amazon.com/neptune/latest/userguide/rssupdates.rss", "AWS", "Amazon Neptune", "图数据库", "AWS,Amazon Neptune,图数据库", "AWS Amazon Neptune 官方文档更新 RSS"),
     ("Amazon Keyspaces for Apache Cassandra 动态", "https://aws.amazon.com/blogs/database/category/database/amazon-managed-apache-cassandra-service/feed/", "AWS", "Amazon Keyspaces for Apache Cassandra", "宽列数据库", "AWS,Amazon Keyspaces for Apache Cassandra,宽列数据库", "AWS Amazon Keyspaces for Apache Cassandra 数据库博客 RSS"),
     ("Amazon Timestream 动态", "https://aws.amazon.com/blogs/database/category/database/amazon-timestream/feed/", "AWS", "Amazon Timestream", "时序数据库", "AWS,Amazon Timestream,时序数据库", "AWS Amazon Timestream 数据库博客 RSS"),
-    ("RDS for Db2 动态", "https://aws.amazon.com/blogs/database/category/database/amazon-rds/rds-for-db2/feed/", "AWS", "RDS for Db2", "关系型", "AWS,RDS,RDS for Db2,关系型", "AWS RDS for Db2 数据库博客 RSS"),
-    ("RDS for MariaDB 动态", "https://aws.amazon.com/blogs/database/category/database/amazon-rds/rds-for-mariadb/feed/", "AWS", "RDS for MariaDB", "关系型", "AWS,RDS,RDS for MariaDB,关系型", "AWS RDS for MariaDB 数据库博客 RSS"),
-    ("RDS for MySQL 动态", "https://aws.amazon.com/blogs/database/category/database/amazon-rds/rds-for-mysql/feed/", "AWS", "RDS for MySQL", "关系型", "AWS,RDS,RDS for MySQL,关系型", "AWS RDS for MySQL 数据库博客 RSS"),
-    ("RDS for Oracle 动态", "https://aws.amazon.com/blogs/database/category/database/amazon-rds/rds-for-oracle/feed/", "AWS", "RDS for Oracle", "关系型", "AWS,RDS,RDS for Oracle,关系型", "AWS RDS for Oracle 数据库博客 RSS"),
+    ("Amazon RDS 动态", "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rdsupdates.rss", "AWS", "Amazon RDS", "关系型", "AWS,Amazon RDS,关系型", "AWS Amazon RDS 官方文档更新 RSS"),
 ]
 
 GOOGLE_CLOUD_DATABASE_FEEDS = [
@@ -504,7 +500,14 @@ def bulk_create_feeds(payload: BulkFeedIn):
 @app.put("/api/feeds/{feed_id}")
 def update_feed(feed_id: int, payload: FeedIn):
     with db() as conn:
+        old = one(conn.execute("SELECT rss_url FROM feeds WHERE id=?", (feed_id,)))
+        url_changed = old is not None and old["rss_url"] != payload.rss_url
         conn.execute("UPDATE feeds SET name=?,rss_url=?,vendor=?,product=?,db_type=?,tags=?,description=?,enabled=?,status=?,updated_at=? WHERE id=?", (payload.name, payload.rss_url, payload.vendor, payload.product, payload.db_type, ",".join(payload.tags), payload.description, int(payload.enabled), "normal" if payload.enabled else "disabled", now_iso(), feed_id))
+        if url_changed:
+            # 换了订阅地址：清空旧地址抓到的历史动态，并重置抓取缓存状态，
+            # 让新地址从头抓取，避免新旧条目混在一起。
+            conn.execute("DELETE FROM entries WHERE feed_id=?", (feed_id,))
+            conn.execute("UPDATE feeds SET etag='',last_modified='',latest_item_published_at=NULL WHERE id=?", (feed_id,))
     return get_feed(feed_id)
 
 

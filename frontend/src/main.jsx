@@ -15,20 +15,41 @@ import './styles.css';
 
 const validPages = new Set(['overview', 'feeds', 'feed-detail', 'groups', 'group-detail', 'entries', 'status', 'docs']);
 
-function initialPage() {
-  const page = new URLSearchParams(window.location.search).get('page');
+function readPage(search = window.location.search) {
+  const page = new URLSearchParams(search).get('page');
   return validPages.has(page) ? page : 'overview';
 }
 
+function readId(key, search = window.location.search) {
+  const value = new URLSearchParams(search).get(key);
+  return value ? Number(value) : null;
+}
+
+function buildLocation(page, feedId, groupId) {
+  const url = new URL(window.location.href);
+  const params = url.searchParams;
+  if (page === 'overview') params.delete('page');
+  else params.set('page', page);
+  if (page === 'feed-detail' && feedId) params.set('feedId', String(feedId));
+  else params.delete('feedId');
+  if (page === 'group-detail' && groupId) params.set('groupId', String(groupId));
+  else params.delete('groupId');
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function currentLocation() {
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
 function App() {
-  const [page, setPageState] = useState(initialPage);
+  const [page, setPageState] = useState(readPage);
   const [globalKeyword, setGlobalKeyword] = useState('');
   const [overview, setOverview] = useState({ stats: {}, trend: [], recent_feeds: [], groups: [], abnormal_feeds: [] });
   const [feeds, setFeeds] = useState([]);
   const [groups, setGroups] = useState([]);
   const [logs, setLogs] = useState([]);
-  const [selectedFeed, setSelectedFeed] = useState(null);
-  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [selectedFeed, setSelectedFeed] = useState(() => readId('feedId'));
+  const [selectedGroup, setSelectedGroup] = useState(() => readId('groupId'));
   const [error, setError] = useState('');
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -36,13 +57,27 @@ function App() {
   const setPage = useCallback((nextPage) => {
     setPageState((current) => {
       const value = typeof nextPage === 'function' ? nextPage(current) : nextPage;
-      if (!validPages.has(value)) return current;
-      const url = new URL(window.location.href);
-      if (value === 'overview') url.searchParams.delete('page');
-      else url.searchParams.set('page', value);
-      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
-      return value;
+      return validPages.has(value) ? value : current;
     });
+  }, []);
+
+  // Sync navigation state -> URL. Pushes a new history entry only when the
+  // target location actually differs (so back/forward stays meaningful and the
+  // initial mount / popstate updates don't create duplicate entries).
+  useEffect(() => {
+    const target = buildLocation(page, selectedFeed, selectedGroup);
+    if (target !== currentLocation()) window.history.pushState(null, '', target);
+  }, [page, selectedFeed, selectedGroup]);
+
+  // Sync URL -> state when the user uses the browser back/forward buttons.
+  useEffect(() => {
+    const onPopState = () => {
+      setPageState(readPage());
+      setSelectedFeed(readId('feedId'));
+      setSelectedGroup(readId('groupId'));
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
   const loadOverview = useCallback(async () => {
