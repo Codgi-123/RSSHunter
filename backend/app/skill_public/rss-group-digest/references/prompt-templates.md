@@ -27,17 +27,14 @@ The upstream agent should pass entries as JSON. Keep original fields when availa
   "entries": [
     {
       "id": 101,
-      "guid": "vendor-item-guid",
       "title": "Release note title",
       "summary": "Entry summary or content excerpt",
       "link": "https://example.com/release",
       "published_at": "2026-06-12T08:00:00+00:00",
-      "created_at": "2026-06-12T08:05:00+00:00",
       "feed_name": "Vendor feed",
       "vendor": "Vendor",
       "product": "Product",
-      "db_type": "Vector database",
-      "tags": ["vector", "release-note"]
+      "db_type": "Vector database"
     }
   ]
 }
@@ -113,7 +110,7 @@ For global dynamics, use `target.scope=global`, set `group` to `null`, and inclu
 1. 标题：一句话概括本周期最重要变化。
 2. 汇总：3 到 6 条，说明本周期更新数量、涉及来源、主要产品或主题、整体判断。
 3. AI 选取的重要内容：最多 {max_highlights} 条，按重要性排序。每条包含重要级别、标题、入选原因、影响、建议动作、来源链接或 entry ID。
-4. 详细列表：列出本周期所有输入条目。优先按 {detailed_list_group_by} 分组，其次按发布时间倒序。每条包含标题、产品或来源、发布时间、简短摘要、链接、entry ID。
+4. 详细列表：列出本周期所有输入条目，用 Markdown 表格输出。表格列为：日期、产品/来源、更新内容（一句话摘要）、原始链接。按发布日期升序排列，同一天的条目连续排列。链接列用 `[查看原文]({link})` 格式，无链接时写"—"。
 5. 证据不足事项：只列真实存在但证据不足的事项。没有则写“无”。
 ```
 
@@ -145,11 +142,9 @@ For global dynamics, use `target.scope=global`, set `group` to `null`, and inclu
 
 ## 三、详细列表
 
-### {source_or_group}
-
-- {published_at} | {product_or_vendor} | {title}
-  摘要：{brief_summary}
-  来源：{entry_id_or_link}
+| 日期 | 产品/来源 | 更新内容 | 原始链接 |
+|------|-----------|----------|----------|
+| {date} | {product_or_vendor} | {brief_summary} | [{title}]({link}) |
 
 ## 证据不足事项
 
@@ -217,10 +212,11 @@ For global dynamics, use `target.scope=global`, set `group` to `null`, and inclu
 5. Next：根据 setup_state 选择下一步。
 
 配置完成门禁：
-- report_scope、目标配置、cadence、run_time、timezone、preview_decision 都有值后，才能设置 handoff_ready=true。
+- report_scope、目标配置、cadence、run_time、timezone、preview_decision、feishu_enabled 都有值后，才能设置 handoff_ready=true。
 - report_scope=group 时，selected_group 必须有值。
 - report_scope=global 时，global_filters 和 date_filter 必须有值。全局动态支持 start/end 日期筛选。
 - preview_decision=null 时，必须询问是否现在生成或推送预览。
+- feishu_enabled=null 时，必须询问是否保存为飞书文档。
 - handoff_ready=false 时，不要宣布配置完成。
 
 URL 门禁：
@@ -230,7 +226,7 @@ URL 门禁：
 - 如果出现 TLS、证书或握手错误，先检查是否误用了 https；若误用，改回 api.base_url 后重试。
 
 每次运行：
-1. 读取配置 {config_ref}。
+1. 读取 skill 目录下的 config.json（rss-group-digest/config.json）。
 2. 根据 report_window.cadence 计算对应的完整报告窗口，或使用调用方传入的窗口。
 3. 如果 report_scope=group，对每个 subscription_group 请求 {api_base_url}/groups/{group_id} 校验元数据。
 4. 如果 report_scope=group，请求 {api_base_url}/groups/{group_id}/entries?start={start}&end={end}&limit={limit}&offset={offset}，必要时分页。
@@ -238,7 +234,17 @@ URL 门禁：
 6. 用 state.dedupe_keys 和上层 agent 的状态存储过滤重复条目。
 7. 使用 Update Report Summarizer prompt 生成报告。
 8. 校验报告包含汇总、AI 选取的重要内容、详细列表。
-9. 写入上层 agent 的运行状态和 seen_entry_ids。
-10. dry_run=true 时只生成预览，不发送。
-11. 失败时由上层 agent 记录错误、重试并处理通知。
+9. 如果 feishu.enabled=true 且 dry_run=false，将报告写入飞书文档（无需额外凭证，使用 agent 已有的飞书访问权限）：
+   a. report_date = 报告窗口最后一天（YYYY-MM-DD，UTC+8）
+   b. month = report_date.month
+   c. monday_of_week = report_date 所在 ISO 周的周一（UTC+8）
+   d. week_of_month = ceil(monday_of_week.day / 7)
+   e. folder_path = "{root_folder_name}/M{month}/W{week_of_month}"
+   f. doc_title = "【{report_date}】{target_label} 市场动态报告"
+   g. 按路径逐级创建文件夹（已存在则直接使用）
+   h. 在目标文件夹下创建或更新文档，写入报告正文
+   i. 记录文档 URL 到运行状态
+10. 写入上层 agent 的运行状态和 seen_entry_ids。
+11. dry_run=true 时只生成预览，不发送，不写飞书。
+12. 失败时由上层 agent 记录错误、重试并处理通知。
 ```

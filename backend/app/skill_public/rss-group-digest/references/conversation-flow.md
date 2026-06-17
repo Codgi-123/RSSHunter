@@ -4,7 +4,35 @@ Use this flow to guide the user from intent to a complete recurring update repor
 
 ## Entry Point: First Message After Skill Load
 
-When the skill is first loaded (either just installed or explicitly invoked), output the following message to the user **before** starting the state machine. Fill in the bracketed values from the known context.
+When the skill is first loaded (either just installed or explicitly invoked), **first check whether `config.json` already exists in the skill directory**.
+
+### If `config.json` exists
+
+Output the following message:
+
+```text
+ProductHunter 更新报告 Skill 已就绪。
+
+检测到已有配置：
+
+- 报告范围：{report_scope}
+- 目标：{target_summary}
+- 报告频率：{cadence_label}，{run_time}（{timezone}）
+- 飞书文档：{feishu_summary}
+
+是否继续使用此配置，还是重新配置？
+1. 继续使用
+2. 重新配置
+```
+
+Rules:
+- If the user chooses "继续使用", load the existing config and confirm it is active. Do not re-run onboarding.
+- If the user chooses "重新配置", discard the existing config and start the full onboarding flow below.
+- Do not silently apply the existing config without showing it to the user first.
+
+### If `config.json` does not exist
+
+Output the following message:
 
 ```text
 ProductHunter 更新报告 Skill 已就绪。
@@ -25,8 +53,8 @@ API 地址：{api_base_url}
 2. 全局动态报告（从全部条目中按条件筛选）
 ```
 
-Rules for the entry point:
-- Output this message exactly once, when entering the setup flow for the first time.
+Rules:
+- Output this message exactly once when entering the setup flow for the first time.
 - Do not output it again if the user resumes a partially completed setup.
 - `{api_base_url}` is the known API root from the install guide or user input. If unknown, omit the API address line and add it to `missing_dependencies`.
 - After outputting this message, wait for the user's answer and then enter the state machine at gate 3 (`report_scope=null`).
@@ -55,6 +83,8 @@ Minimum `setup_state`:
   "timezone": null,
   "preview_decision": null,
   "preview_result": null,
+  "feishu_enabled": null,
+  "feishu_config": null,
   "handoff_ready": false
 }
 ```
@@ -96,11 +126,14 @@ State gates:
 10. `timezone=null`: infer from locale when reliable, otherwise ask.
 11. `preview_decision=null`: ask whether to generate or push a preview now.
 12. `preview_decision=true` and `preview_result=null`: generate or push the preview according to available delivery capability.
-13. All required fields present: produce final handoff and set `handoff_ready=true`.
+13. `feishu_enabled=null`: ask whether to save reports to Feishu documents. See Phase 4: Feishu Document Delivery.
+14. `feishu_enabled=true` and `feishu_config=null`: confirm the root folder name with the user.
+15. All required fields present: produce final handoff and set `handoff_ready=true`.
 
 Stop conditions:
 
 - Do not say the setup is complete while `preview_decision=null`.
+- Do not say the setup is complete while `feishu_enabled=null`.
 - Do not say the first scheduled report will arrive while `handoff_ready=false`.
 - Do not claim an external push happened unless `preview_result.sent=true`.
 
@@ -302,7 +335,52 @@ Rules:
 - Keep `dry_run=true` unless the user explicitly confirms live delivery.
 - Do not say “配置完成” or equivalent until the preview decision has been recorded.
 
-## Phase 4: Summary Requirements
+## Phase 4: Feishu Document Delivery
+
+Goal: ask whether the user wants reports automatically saved to a Feishu (Lark) document, and collect the necessary config.
+
+Ask after the preview decision is recorded:
+
+```text
+是否需要将每次生成的报告自动保存为飞书文档？
+
+保存规则：
+- 文件夹路径：{target_label}市场动态报告/M{月份}/W{周数}
+- 文档标题：【{报告日期}】{target_label} 市场动态报告
+- 周数以周一为起始，UTC+8 时区计算（例如 2026-06-11 属于 6 月第 2 周，存放路径为 M6/W2）
+
+如需开启，直接回复「是」或确认根文件夹名称（默认为「{target_label}市场动态报告」）。
+如暂不配置，回复「跳过」即可。
+```
+
+Rules:
+
+- `feishu_enabled` stays `null` until the user explicitly accepts or declines.
+- If the user declines or says "跳过", set `feishu_enabled=false` and `feishu_config=null`. Move to Phase 5.
+- If the user accepts, only collect:
+  - `root_folder_name`: default to `{target_label}市场动态报告`. Accept user override if provided.
+- Do not ask for any credentials, tokens, App ID, or App Secret. The agent already has Feishu access configured.
+- Confirm the folder name with the user before finalizing.
+
+**Folder path and title calculation (upstream agent responsibility):**
+
+```text
+Given report_date (YYYY-MM-DD, UTC+8):
+
+1. month = report_date.month                          → x in Mx
+2. Find the Monday of report_date's ISO week in UTC+8
+3. week_of_month = ceil(monday.day / 7)               → y in Wy
+4. folder_path = "{root_folder_name}/M{month}/W{week_of_month}"
+5. doc_title   = "【{report_date}】{target_label} 市场动态报告"
+
+Example: report_date = 2026-06-11
+  month = 6
+  Monday of that week = 2026-06-08, day=8, ceil(8/7) = 2
+  folder_path = "Memory市场动态报告/M6/W2"
+  doc_title   = "【2026-06-11】Memory 市场动态报告"
+```
+
+## Phase 5: Summary Requirements (previously Phase 4)
 
 Goal: shape the output the user actually wants.
 
@@ -331,28 +409,17 @@ Required report sections:
 - AI-selected important content.
 - Detailed item list.
 
-## Phase 5: Upstream Agent Handoff
+## Phase 6: Upstream Agent Handoff
 
-Goal: make the boundary explicit so the config can be used by another agent.
+Goal: write the final config and make responsibilities clear.
 
-Ask when missing:
+- Save the generated configuration as `config.json` inside the skill directory (`rss-group-digest/config.json`). Do not ask the user where to save it.
+- The upstream agent reads `config.json` from the skill directory on each run. No external storage is needed.
+- Ask only when missing:
+  1. Does delivery need a specific channel or destination? Ask only when the user mentions it. Never ask the user to paste raw secrets.
+  2. Should future runs use live delivery? Keep `dry_run=true` until the user explicitly confirms.
 
-1. Where should the configuration be stored?
-   - If unknown, return the JSON in the response and let the upstream agent store it.
-
-2. Does the upstream agent already own scheduling and state?
-   - Default: yes.
-   - If no, list that as a missing dependency.
-
-3. Does delivery need to be included in the config?
-   - Ask only when the user wants the handoff to include channel metadata.
-   - Never ask the user to paste raw secrets.
-
-4. Should future runs send to a delivery channel?
-   - Ask only when the user wants real delivery setup.
-   - Keep the first preview as dry-run unless the user explicitly confirms live delivery.
-
-## Phase 6: Confirmation
+## Phase 7: Confirmation
 
 Before producing the final config, summarize the choices:
 
@@ -364,6 +431,7 @@ Before producing the final config, summarize the choices:
 输出：{language}，三段式报告，面向 {audience}
 重点：{priority_signals}
 预览：{preview_plan}
+飞书文档：{feishu_summary}（路径：{target_label}市场动态报告/Mx/Wy，标题：【日期】{target_label} 市场动态报告）
 运行方：上层 agent 负责调度、状态和推送
 缺失项：{missing_dependencies}
 ```
@@ -380,5 +448,6 @@ When the user wants a fast setup and no system data is available, ask:
 4. 希望多久收到一次更新报告？
 5. 用哪个时区计算报告窗口？
 6. 是否现在先生成一份预览报告？
+7. 是否将报告保存为飞书文档？如需开启，提供飞书 App ID 和 App Secret。
 
 Then generate a draft config with missing fields clearly marked.

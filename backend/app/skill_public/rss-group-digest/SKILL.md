@@ -22,14 +22,18 @@ Keep responsibilities clear:
 
 ## Workflow
 
-1. Drive setup with a ReAct-style state loop:
+1. On load, check whether `config.json` already exists in the skill directory:
+   - If it exists: show the existing config to the user and ask whether to keep it or reconfigure. Do not silently apply it.
+   - If it does not exist: start the full setup flow.
+
+2. Drive setup with a ReAct-style state loop:
    - Reason internally about the missing state. Do not reveal private reasoning.
    - Act by doing exactly one next action.
    - Observe the result from the API, user response, or generated config.
    - Check and update `setup_state` after every action.
    - Continue only according to the next missing state.
 
-2. Maintain `setup_state` throughout setup:
+3. Maintain `setup_state` throughout setup:
    - `api_base_url`
    - `api_url_locked`
    - `report_scope`
@@ -45,7 +49,7 @@ Keep responsibilities clear:
    - `preview_result`
    - `handoff_ready`
 
-3. Enforce state gates:
+4. Enforce state gates:
    - When `api_base_url` is already provided by the install guide or install script, use it directly. Do not ask the user for the API URL.
    - When `api_url_locked=true`, use `api_base_url` exactly. Do not change `http` to `https`, and do not remove explicit ports.
    - When an API request fails with TLS, certificate, or handshake errors, check whether `https` was used accidentally. If so, retry with the locked `api_base_url`.
@@ -56,9 +60,10 @@ Keep responsibilities clear:
    - When `report_scope=global`, skip group selection and configure `global_filters` plus `date_filter`. Global dynamics reports support `start` and `end` date filtering.
    - When `cadence` or `run_time` is empty, ask for report interval and time.
    - When `preview_decision` is empty, ask whether to generate or push a preview.
-   - Set `handoff_ready=true` only after report scope, target configuration, cadence, run time, timezone, and preview decision are captured.
+   - When `feishu_enabled` is null, ask whether to save reports to Feishu documents. Do not declare setup complete until the user has answered this question.
+   - Set `handoff_ready=true` only after report scope, target configuration, cadence, run time, timezone, preview decision, and feishu_enabled are all captured.
 
-4. Discover the runtime context:
+5. Discover the runtime context:
    - ProductHunter-compatible API base URL.
    - Exact API URL from the install guide or user input, preserving protocol and port.
    - Report scope: `group` for subscription groups or `global` for global dynamics.
@@ -71,7 +76,7 @@ Keep responsibilities clear:
    - Report audience, language, priority signals, length, and grouping preference.
    - Upstream agent constraints only when the user mentions them.
 
-5. Guide setup in this order. Use `references/conversation-flow.md` for details:
+6. Guide setup in this order. Use `references/conversation-flow.md` for details:
    - Determine the report scope.
    - If `group`, show available subscription groups with ID, name, description, feed count, status, and latest update.
    - If no groups exist, send the user to the ProductHunter group creation page and wait for a group ID or name.
@@ -82,20 +87,20 @@ Keep responsibilities clear:
    - Do not claim setup is complete until the user has answered the preview question.
    - Ask only the remaining high-impact questions.
 
-6. Validate the target before producing a final handoff:
+7. Validate the target before producing a final handoff:
    - If the API is reachable and `report_scope=group`, verify every subscription group.
    - If the API is reachable and `report_scope=global`, run a small `/api/entries` fetch with the selected filters and date window.
    - If the API is not reachable, produce a draft config and list `missing_dependencies`.
    - If sample entries are available, fetch a small historical window and confirm the prompt can consume the response shape.
    - Do not promise live scheduling, background jobs, or push delivery from this skill.
 
-7. Generate or update a configuration object. Use `references/config-schema.md` for canonical fields, defaults, and API call examples.
+8. Generate or update a configuration object. Use `references/config-schema.md` for canonical fields, defaults, and API call examples. Save the final config as `config.json` inside the skill directory (`rss-group-digest/config.json`). Do not ask the user where to save it.
 
-8. Select prompts:
+9. Select prompts:
    - Use `references/prompt-templates.md` for the update report system prompt, user prompt, empty report, highlight selection rules, and upstream agent handoff prompt.
    - Customize templates with the selected audience, language, priority signals, time window, and target labels.
 
-9. Return a concise handoff:
+10. Return a concise handoff:
    - Final configuration JSON or YAML.
    - Update report prompt templates to install in the upstream agent.
    - API calls the upstream agent should make for each date window.

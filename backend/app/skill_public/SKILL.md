@@ -14,28 +14,12 @@
 
 - 用户明确说”只安装””先不要配置””安装完停止”时，只安装并回复安装结果。
 - 其他情况安装完成后默认进入配置流程，**不要停在”是否需要帮你读 Skill 内容”这一步**。
-- 不要询问、要求或暴露安装路径。安装位置是 agent 的内部实现细节。
 - API 根地址已由本安装指引确定为 `{{BASE_URL}}/api`，**进入配置流程后无需再询问用户**。
 - API URL 必须原样使用，保留协议、域名和端口，不要把 `http` 改成 `https`，不要删除端口号。
 
-## Skill 加载方式
+## 安装后行为
 
-安装脚本执行成功后，按以下方式之一加载 Skill，然后按 Skill 中的流程引导配置：
-
-**支持 `$skill` 语法的 agent：**
-```text
-$rss-group-digest
-```
-
-**不支持 `$skill` 语法的 agent（直接读取已安装文件）：**
-1. 读取 `{SKILL_ROOT}/SKILL.md`（完整 Skill 描述和工作流）
-2. 读取 `{SKILL_ROOT}/references/conversation-flow.md`（对话引导细节）
-3. 需要生成配置时读取 `{SKILL_ROOT}/references/config-schema.md`
-4. 需要生成报告 prompt 时读取 `{SKILL_ROOT}/references/prompt-templates.md`
-
-`{SKILL_ROOT}` 是安装脚本输出的安装目录（通常为 `~/.codex/skills/rss-group-digest`）。
-
-加载完成后，将 `api_base_url` 预设为 `{{BASE_URL}}/api` 写入 `setup_state`，然后输出 `references/conversation-flow.md` 中 **Entry Point: First Message After Skill Load** 一节定义的开场消息，再按 Skill 工作流驱动配置。
+安装脚本执行成功后，通过 agent 自身的 Skill 加载机制加载 `rss-group-digest`。加载完成后，将 `api_base_url` 预设为 `{{BASE_URL}}/api` 写入 `setup_state`，然后输出 `references/conversation-flow.md` 中 **Entry Point: First Message After Skill Load** 一节定义的开场消息，再按 Skill 工作流驱动配置。
 
 ## 安装目标
 

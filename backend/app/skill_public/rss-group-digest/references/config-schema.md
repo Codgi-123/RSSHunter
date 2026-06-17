@@ -4,14 +4,16 @@ Use this schema as the canonical handoff between setup conversation and the upst
 
 ## JSON Shape
 
+This is a schema reference. All values in angle brackets are placeholders that must be filled in during setup — do not use this example as a default config.
+
 ```json
 {
   "version": "1.0",
-  "name": "vector-database-update-report",
-  "report_scope": "group",
+  "name": "<report-name>",
+  "report_scope": "<group|global>",
   "dry_run": true,
   "owner": {
-    "team": "database-platform",
+    "team": "",
     "contact": ""
   },
   "runner": {
@@ -21,46 +23,33 @@ Use this schema as the canonical handoff between setup conversation and the upst
     "delivery_owned_by": "upstream_agent"
   },
   "setup_state": {
-    "api_base_url": "{{BASE_URL}}/api",
+    "api_base_url": "<API base URL from install guide>",
     "api_url_locked": true,
-    "report_scope": "group",
-    "groups_loaded": true,
-    "groups_available": true,
-    "selected_group": {
-      "id": 6,
-      "name": "向量数据库动态"
-    },
+    "report_scope": null,
+    "groups_loaded": false,
+    "groups_available": null,
+    "selected_group": null,
     "global_filters": {},
-    "date_filter": {
-      "mode": "report_window",
-      "start": "",
-      "end": ""
-    },
-    "cadence": "weekly",
-    "cadence_label": "每周",
-    "run_time": "09:00",
-    "timezone": "Asia/Hong_Kong",
-    "preview_decision": true,
-    "preview_result": {
-      "mode": "conversation_preview",
-      "sent": false
-    },
-    "handoff_ready": true
+    "date_filter": null,
+    "cadence": null,
+    "cadence_label": null,
+    "run_time": null,
+    "timezone": null,
+    "preview_decision": null,
+    "preview_result": null,
+    "feishu_enabled": null,
+    "feishu_config": null,
+    "handoff_ready": false
   },
   "api": {
-    "base_url": "{{BASE_URL}}/api",
+    "base_url": "<API base URL from install guide>",
     "preserve_url": true,
     "auth": {
       "type": "none",
       "secret_ref": ""
     }
   },
-  "subscription_groups": [
-    {
-      "id": 6,
-      "name": "向量数据库动态"
-    }
-  ],
+  "subscription_groups": [],
   "global_report": {
     "enabled": false,
     "label": "全局动态",
@@ -79,25 +68,21 @@ Use this schema as the canonical handoff between setup conversation and the upst
     }
   },
   "report_window": {
-    "cadence": "weekly",
-    "cadence_label": "每周",
+    "cadence": null,
+    "cadence_label": null,
     "interval_count": 1,
-    "timezone": "Asia/Hong_Kong",
+    "timezone": null,
     "week_start": "monday",
     "default_window": "previous_full_week",
-    "run_time_hint": "09:00",
-    "date_format": "YYYY-MM-DD",
-    "example_start": "2026-06-08",
-    "example_end": "2026-06-14"
+    "run_time_hint": null,
+    "date_format": "YYYY-MM-DD"
   },
   "initial_preview": {
-    "offered": true,
-    "requested": true,
-    "decision_required": false,
-    "mode": "conversation_preview",
-    "sent": false,
-    "window_start": "2026-06-08",
-    "window_end": "2026-06-14"
+    "offered": false,
+    "requested": null,
+    "decision_required": true,
+    "mode": null,
+    "sent": false
   },
   "fetch": {
     "mode": "entries",
@@ -144,6 +129,15 @@ Use this schema as the canonical handoff between setup conversation and the upst
     "destination": "",
     "on_empty": "send_short_empty_notice"
   },
+  "feishu": {
+    "enabled": false,
+    "root_folder_name": "{target_label}市场动态报告",
+    "folder_path_template": "{root_folder_name}/M{month}/W{week_of_month}",
+    "doc_title_template": "【{report_date}】{target_label} 市场动态报告",
+    "timezone": "Asia/Shanghai",
+    "week_start": "monday",
+    "week_of_month_algorithm": "ceil(monday_of_week.day / 7)"
+  },
   "missing_dependencies": []
 }
 ```
@@ -188,6 +182,11 @@ Use this schema as the canonical handoff between setup conversation and the upst
 - `report.priority_signals`: order matters. Higher priority appears earlier.
 - `state`: include dedupe hints, but do not assume this skill can persist them.
 - `delivery`: leave channel and destination empty unless the user provides them. The upstream agent binds these values.
+- `feishu.enabled`: set `true` only when the user explicitly opts in during setup.
+- `feishu.root_folder_name`: default to `{target_label}市场动态报告`. Accept user override. The upstream agent creates this folder hierarchy in Feishu if it does not exist — no credentials are needed, the agent already has Feishu access.
+- `feishu.folder_path_template`: `{root_folder_name}/M{month}/W{week_of_month}`. The upstream agent resolves `month` and `week_of_month` from `report_date` in UTC+8 before each run.
+- `feishu.doc_title_template`: `【{report_date}】{target_label} 市场动态报告`. `report_date` is the last day of the report window (YYYY-MM-DD, UTC+8).
+- `feishu.week_of_month_algorithm`: `ceil(monday_of_week.day / 7)` where `monday_of_week` is the Monday of the ISO week containing `report_date` in UTC+8.
 - `missing_dependencies`: list anything required before automation can run.
 
 ## Report Schedule And Window Defaults

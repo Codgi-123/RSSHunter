@@ -30,15 +30,13 @@ download "references/conversation-flow.md" "${SKILL_ROOT}/references/conversatio
 download "references/prompt-templates.md" "${SKILL_ROOT}/references/prompt-templates.md"
 
 cat <<EOF
-ProductHunter 更新报告 Skill 已安装至 ${SKILL_ROOT}
+ProductHunter 更新报告 Skill 已安装。
 
 API 根地址：${BASE_URL}/api
 （必须原样使用，保留协议和端口，不要改成 https，不要删除端口号）
 
 下一步：
-1. 加载已安装的 Skill：
-   - 支持 \$skill 语法：使用 \$${SKILL_NAME}
-   - 不支持时：直接读取 ${SKILL_ROOT}/SKILL.md 和 ${SKILL_ROOT}/references/conversation-flow.md
+1. 通过 agent 自身的 Skill 加载机制加载 \$${SKILL_NAME}。
 2. 将 api_base_url 预设为 ${BASE_URL}/api，写入 setup_state，无需询问用户。
 3. 按 Skill 工作流引导用户完成更新报告配置。
 EOF
