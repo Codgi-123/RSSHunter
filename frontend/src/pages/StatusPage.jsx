@@ -23,9 +23,15 @@ export default function StatusPage({ feeds, logs, reloadFeeds, reloadLogs }) {
     setBusyFeedId(feed.id);
     setMessage('');
     try {
-      await api.post(`/feeds/${feed.id}/refresh`, {});
+      const result = await api.post(`/feeds/${feed.id}/refresh`, {});
       await Promise.all([reloadFeeds(), reloadLogs()]);
-      setMessage(`订阅「${feed.name}」已刷新`);
+      if (result?.result === 'failed') {
+        setMessage(`订阅「${feed.name}」抓取失败：${result.error || '未知错误'}`);
+      } else if (result?.result === 'skipped') {
+        setMessage(`订阅「${feed.name}」已停用，跳过抓取`);
+      } else {
+        setMessage(`订阅「${feed.name}」刷新成功`);
+      }
     } catch (err) {
       setMessage(err.message);
     } finally {

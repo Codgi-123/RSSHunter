@@ -9,6 +9,8 @@ services:
       - rsshunter_data:/app/data
     ports:
       - "9000:9000"
+    extra_hosts:
+      - "rsshub.codgi.xin:host-gateway"
   frontend:
     build: ./frontend
     ports:

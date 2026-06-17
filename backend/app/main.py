@@ -109,6 +109,13 @@ GOOGLE_CLOUD_DATABASE_FEEDS = [
     ("Memorystore for Redis 动态", "https://docs.cloud.google.com/feeds/memorystore-release-notes.xml", "Google Cloud", "Memorystore for Redis", "缓存", "Google Cloud,Memorystore,Redis,缓存", "Google Cloud Memorystore for Redis release notes RSS"),
 ]
 
+AZURE_DATABASE_FEEDS = [
+    ("Azure DocumentDB 动态", "https://rsshub.codgi.xin/microsoft/azure-updates/Azure DocumentDB", "Microsoft", "Azure DocumentDB", "文档数据库", "Microsoft,Azure,Azure DocumentDB,文档数据库", "Azure DocumentDB 官方更新 RSS"),
+    ("Azure Database for MySQL 动态", "https://rsshub.codgi.xin/microsoft/azure-updates/Azure Database for MySQL", "Microsoft", "Azure Database for MySQL", "关系型", "Microsoft,Azure,Azure Database for MySQL,关系型", "Azure Database for MySQL 官方更新 RSS"),
+    ("Azure Database for PostgreSQL 动态", "https://rsshub.codgi.xin/microsoft/azure-updates/Azure Database for PostgreSQL", "Microsoft", "Azure Database for PostgreSQL", "关系型", "Microsoft,Azure,Azure Database for PostgreSQL,PostgreSQL,关系型", "Azure Database for PostgreSQL 官方更新 RSS"),
+    ("Azure SQL 动态", "https://rsshub.codgi.xin/microsoft/azure-updates/Azure SQL", "Microsoft", "Azure SQL", "关系型", "Microsoft,Azure,Azure SQL,关系型", "Azure SQL 官方更新 RSS"),
+]
+
 VOLCENGINE_SOURCE_META = {
     "Redis": ("Redis", "Redis"),
     "Valkey": ("Valkey", "Valkey"),
@@ -215,6 +222,7 @@ def migrate(conn):
     if feed_count:
         ensure_aws_database_feeds(conn)
         ensure_google_cloud_database_feeds(conn)
+        ensure_azure_database_feeds(conn)
     normalize_volcengine_feed_metadata(conn)
 
 
@@ -240,6 +248,25 @@ def ensure_aws_database_feeds(conn):
 def ensure_google_cloud_database_feeds(conn):
     updated_at = now_iso()
     for name, rss_url, vendor, product, db_type, tags, description in GOOGLE_CLOUD_DATABASE_FEEDS:
+        existing = one(conn.execute("SELECT id FROM feeds WHERE rss_url = ?", (rss_url,)))
+        if existing:
+            conn.execute(
+                """UPDATE feeds
+                   SET name = ?, vendor = ?, product = ?, db_type = ?, tags = ?, description = ?, updated_at = ?
+                   WHERE id = ?""",
+                (name, vendor, product, db_type, tags, description, updated_at, existing["id"]),
+            )
+        else:
+            conn.execute(
+                """INSERT INTO feeds(name, rss_url, vendor, product, db_type, tags, description, enabled, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'normal')""",
+                (name, rss_url, vendor, product, db_type, tags, description),
+            )
+
+
+def ensure_azure_database_feeds(conn):
+    updated_at = now_iso()
+    for name, rss_url, vendor, product, db_type, tags, description in AZURE_DATABASE_FEEDS:
         existing = one(conn.execute("SELECT id FROM feeds WHERE rss_url = ?", (rss_url,)))
         if existing:
             conn.execute(
