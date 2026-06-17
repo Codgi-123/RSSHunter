@@ -326,14 +326,15 @@ Rules:
 
 - This phase is required. The setup is incomplete until the user explicitly accepts or declines the preview.
 - Default to preview-only when the user says yes.
-- If the user declines, record `initial_preview.requested=false` and continue to the final handoff.
+- If the user declines, record `initial_preview.requested=false` and continue to Phase 4.
 - Use the selected cadence to compute a recent window. For weekly, use the previous full week by default.
 - For `report_scope=group`, fetch entries from `/api/groups/{group_id}/entries`.
 - For `report_scope=global`, fetch entries from `/api/entries` with the selected filters and `start/end`.
 - If no delivery channel is configured, generate the preview in the current conversation and state that no external push was sent.
 - Do not claim a real push was sent unless the upstream agent actually sends it.
 - Keep `dry_run=true` unless the user explicitly confirms live delivery.
-- Do not say “配置完成” or equivalent until the preview decision has been recorded.
+- After generating the preview, verify it contains all three sections: 总结、重点信息、详细列表. If any section is missing, regenerate before showing the user.
+- Do not say “配置完成” or equivalent until the preview decision has been recorded and Phase 4 (Feishu) is complete.
 
 ## Phase 4: Feishu Document Delivery
 
@@ -448,6 +449,6 @@ When the user wants a fast setup and no system data is available, ask:
 4. 希望多久收到一次更新报告？
 5. 用哪个时区计算报告窗口？
 6. 是否现在先生成一份预览报告？
-7. 是否将报告保存为飞书文档？如需开启，提供飞书 App ID 和 App Secret。
+7. 是否将报告自动保存为飞书文档？如需开启，确认根文件夹名称（默认为「{target_label}市场动态报告」）即可，无需提供任何凭证。
 
 Then generate a draft config with missing fields clearly marked.

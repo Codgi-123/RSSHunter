@@ -83,8 +83,8 @@ Keep responsibilities clear:
    - If `group`, let the user choose by group ID or exact name, then validate the group.
    - If `global`, ask for filters and date policy. Use `/api/entries` with `start` and `end` for date-filtered global dynamics.
    - Ask how often the user wants the update report.
-   - Ask whether to generate or push one preview report immediately.
-   - Do not claim setup is complete until the user has answered the preview question.
+   - Ask whether to generate or push one preview report immediately. Validate that the preview contains all three sections: 总结、重点信息、详细列表.
+   - Ask whether to save reports to Feishu documents. Do not claim setup is complete until the user has answered this question.
    - Ask only the remaining high-impact questions.
 
 7. Validate the target before producing a final handoff:
@@ -129,7 +129,7 @@ Use `published_at` as the primary content time. Fall back to `created_at` only w
 - Treat global dynamics date filtering as first-class. Preserve user-provided `start` and `end`, or derive them from the recurring report window.
 - Do not configure real-time notification behavior as the default.
 - Keep generated prompts model-agnostic unless the user chooses a provider or model.
-- Make the report structure explicit: overview, AI-selected highlights, and detailed item list.
+- Make the report structure explicit: 总结、重点信息、详细列表. All three sections are required; a report missing any section is incomplete.
 - Preserve source links and entry IDs so users can audit every conclusion.
 - Keep scheduling, state, retry, credential, and delivery responsibilities assigned to the upstream agent.
 - Treat the preview decision as required. After the user provides cadence and run time, the next assistant response must ask whether to generate or push a preview report. Do not say the schedule is configured until the preview decision is captured.
