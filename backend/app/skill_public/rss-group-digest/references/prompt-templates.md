@@ -1,6 +1,6 @@
 # Prompt Templates
 
-These templates are model-agnostic. Replace bracketed variables before use. The main output must include three sections: overview, AI-selected highlights, and detailed item list.
+These templates are model-agnostic. Replace bracketed variables before use. The main output must include three sections: summary, key highlights, and detailed item list.
 
 ## Data Input Contract
 
@@ -69,49 +69,21 @@ For global dynamics, use `target.scope=global`, set `group` to `null`, and inclu
 ## System Prompt: Update Report Summarizer
 
 ```text
-你是一个严谨的 ProductHunter 更新报告分析助手。你的任务是把 ProductHunter 兼容系统提供的订阅组条目或全局动态条目总结成周期性更新报告。
-
-要求：
-1. 只基于输入条目总结，不补充输入中没有的事实。
-2. 输出必须包含三部分：汇总、AI 选取的重要内容、详细列表。
-3. 优先识别安全、破坏性变更、弃用、价格变化、兼容性、事故、新功能和性能改进。
-4. 可以合并重复或高度相似的条目，但必须保留所有相关 entry ID 或来源链接。
-5. 每条重要判断都要附带来源条目 ID 或链接。
-6. 没有证据时写“未从输入中看到明确证据”。
-7. 不要把普通小更新夸大成高风险事项。
-8. 如果没有新内容，输出简短的空报告。
-9. 用 {language} 输出，面向 {audience}。
+你是一个 RSS 订阅更新分析助手。把输入的条目总结成周期性更新报告，输出三部分：总结、重点信息、详细列表。只基于输入内容，不补充没有的事实。
 ```
 
 ## User Prompt: Update Report
 
 ```text
-请为「{target_label}」生成{cadence_label}更新报告。
-
-时间范围：{window_start} 到 {window_end}
-时区：{timezone}
-报告间隔：{cadence_label}
-报告范围：{report_scope}
-筛选条件：{filters_summary}
-
-配置：
-- 受众：{audience}
-- 语言：{language}
-- 优先关注：{priority_signals}
-- AI 选取的重要内容上限：{max_highlights}
-- 详细列表分组方式：{detailed_list_group_by}
-- 必须包含来源链接：{include_source_links}
-- 必须包含 entry ID：{include_entry_ids}
+请为「{target_label}」生成{cadence_label}更新报告（{window_start} 至 {window_end}）。
 
 输入条目：
 {entries_json}
 
 请输出：
-1. 标题：一句话概括本周期最重要变化。
-2. 汇总：3 到 6 条，说明本周期更新数量、涉及来源、主要产品或主题、整体判断。
-3. AI 选取的重要内容：最多 {max_highlights} 条，按重要性排序。每条包含重要级别、标题、入选原因、影响、建议动作、来源链接或 entry ID。
-4. 详细列表：列出本周期所有输入条目，用 Markdown 表格输出。表格列为：日期、产品/来源、更新内容（一句话摘要）、原始链接。按发布日期升序排列，同一天的条目连续排列。链接列用 `[查看原文]({link})` 格式，无链接时写"—"。
-5. 证据不足事项：只列真实存在但证据不足的事项。没有则写“无”。
+1. 总结：2-4 条，说明本周期更新数量、主要产品、整体判断。
+2. 重点信息：最多 5 条，优先选安全、破坏性变更、价格变化、重要新功能，每条附来源链接。
+3. 详细列表：Markdown 表格，列为日期、产品/来源、更新内容（一句话摘要）、原始链接，按日期升序排列。链接列用 `[查看原文]({link})` 格式，无链接时写”—“。
 ```
 
 ## Required Report Format
@@ -120,83 +92,27 @@ For global dynamics, use `target.scope=global`, set `group` to `null`, and inclu
 # {target_label} {cadence_label}更新报告
 
 时间范围：{window_start} 至 {window_end}
-报告范围：{report_scope}
-筛选条件：{filters_summary}
-覆盖条目：{item_count}
-覆盖来源：{source_count}
 
-## 一、汇总
+## 一、总结
 
 - {summary_1}
 - {summary_2}
-- {summary_3}
 
-## 二、AI 选取的重要内容
+## 二、重点信息
 
-### [{severity}] {title}
-
-- 入选原因：{selection_reason}
-- 影响：{impact}
-- 建议动作：{recommended_action}
-- 来源：{entry_ids_or_links}
+- {title}（来源：[查看原文]({link})）
 
 ## 三、详细列表
 
 | 日期 | 产品/来源 | 更新内容 | 原始链接 |
 |------|-----------|----------|----------|
-| {date} | {product_or_vendor} | {brief_summary} | [{title}]({link}) |
-
-## 证据不足事项
-
-- {uncertain_item_or_none}
-```
-
-## Important Item Selection Rules
-
-```text
-按以下优先级选择“AI 选取的重要内容”：
-
-1. 安全风险、事故、数据丢失、可用性风险。
-2. 破坏性变更、弃用、兼容性变化、迁移要求。
-3. 价格、计费、配额、服务等级变化。
-4. 对 {audience} 有明确行动价值的新功能或能力变化。
-5. 性能、稳定性、可观测性、运维体验改进。
-6. 产品方向、生态集成、平台支持范围变化。
-
-不要选择仅有营销表述且缺少实质变化的条目，除非它影响用户决策。
-不要因为标题看起来重要就推断风险。风险必须来自输入内容。
+| {date} | {product_or_vendor} | {brief_summary} | [查看原文]({link}) |
 ```
 
 ## Empty Report
 
 ```text
 「{target_label}」在 {window_start} 至 {window_end} 没有新内容。
-
-本报告由上层 agent 生成。请在下一次报告窗口继续检查。
-```
-
-## Deduplication Prompt
-
-```text
-下面是本周期抓取到的 ProductHunter 条目。请把重复、同一版本多端发布、同一功能的相关条目合并为主题组。
-
-判断规则：
-1. 标题版本号、产品名、PR 编号、CVE 编号相同或高度相关时优先合并。
-2. 不要合并不同产品或不同风险级别的条目。
-3. 每个主题组保留所有来源 ID。
-
-输入：
-{entries_json}
-
-输出 JSON：
-[
-  {
-    "topic": "...",
-    "severity": "critical|high|medium|low|info",
-    "entry_ids": [1, 2],
-    "reason": "..."
-  }
-]
 ```
 
 ## Upstream Agent Handoff Prompt
@@ -233,7 +149,7 @@ URL 门禁：
 5. 如果 report_scope=global，请求 {api_base_url}/entries?start={start}&end={end}&limit={limit}&offset={offset}，并追加已配置的 keyword、vendor、product、db_type、feed_id、group_id。
 6. 用 state.dedupe_keys 和上层 agent 的状态存储过滤重复条目。
 7. 使用 Update Report Summarizer prompt 生成报告。
-8. 校验报告包含汇总、AI 选取的重要内容、详细列表。
+8. 校验报告包含总结、重点信息、详细列表三部分。
 9. 如果 feishu.enabled=true 且 dry_run=false，将报告写入飞书文档（无需额外凭证，使用 agent 已有的飞书访问权限）：
    a. report_date = 报告窗口最后一天（YYYY-MM-DD，UTC+8）
    b. month = report_date.month
