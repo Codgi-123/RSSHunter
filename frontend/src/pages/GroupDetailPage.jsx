@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarDays, Database, Grid2X2, List, Search, Users } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Database, Edit3, Grid2X2, List, Search, Users } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import CalendarGrid from '../components/CalendarGrid';
@@ -13,10 +13,11 @@ import Pagination, { getPageItems } from '../components/Pagination';
 import StatusPill from '../components/StatusPill';
 import SummaryContent from '../components/SummaryContent';
 import TagList from '../components/TagList';
-import { formatDateTime, unique } from '../utils/format';
+import { formatDateTime, splitTags, unique } from '../utils/format';
 import { viewLabel } from '../utils/view';
+import { GroupModal } from './GroupsPage';
 
-export default function GroupDetailPage({ groupId, setPage }) {
+export default function GroupDetailPage({ groupId, setPage, feeds = [], reloadGroups }) {
   const [group, setGroup] = useState(null);
   const [entries, setEntries] = useState({ total: 0, items: [] });
   const [bySource, setBySource] = useState([]);
@@ -33,6 +34,10 @@ export default function GroupDetailPage({ groupId, setPage }) {
   const [error, setError] = useState('');
   const [todayCount, setTodayCount] = useState(null);
   const [weekCount, setWeekCount] = useState(null);
+  const [editing, setEditing] = useState(undefined);
+  const [editForm, setEditForm] = useState({});
+  const [editBusy, setEditBusy] = useState(false);
+  const [editErrors, setEditErrors] = useState({});
 
   async function loadGroup() {
     if (!groupId) return;
@@ -125,11 +130,44 @@ export default function GroupDetailPage({ groupId, setPage }) {
     setFilters({ keyword: '', vendor: '', product: '', start: '', end: '' });
   };
 
+  async function openEdit() {
+    setEditErrors({});
+    setEditBusy(true);
+    try {
+      const data = await api.get(`/groups/${groupId}`, undefined, { cache: false });
+      setEditForm({ ...data, tags: splitTags(data.tags), feed_ids: (data.feeds || []).map((feed) => feed.id) });
+      setEditing(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  async function submitEdit() {
+    const errors = {};
+    if (!editForm.name?.trim()) errors.name = '请输入订阅组名称';
+    if (!editForm.feed_ids.length) errors.feed_ids = '请至少选择一个订阅源';
+    setEditErrors(errors);
+    if (Object.keys(errors).length) return;
+    const payload = { ...editForm, tags: splitTags(editForm.tags), enabled: Boolean(editForm.enabled), feed_ids: editForm.feed_ids.map(Number) };
+    setEditBusy(true);
+    try {
+      await api.put(`/groups/${groupId}`, payload);
+      setEditing(undefined);
+      await Promise.all([loadGroup(), reloadGroups?.()]);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
   if (loading) return <><PageTitle title="订阅组详情" subtitle="正在加载订阅组信息..." /><LoadingState title="正在加载订阅组..." rows={4} /></>;
   if (!group) return <><PageTitle title="订阅组详情" subtitle="无法加载订阅组信息" actions={<button onClick={reloadAll}><Database size={17} />重试</button>} />{error && <div className="form-error">{error}</div>}</>;
   return (
     <>
-      <PageTitle title="订阅组详情" subtitle="查看订阅组内聚合动态，支持聚合列表、按源分组与日历切换" actions={<><button onClick={() => setPage('groups')}><ArrowLeft size={18} />返回列表</button><button onClick={reloadAll} disabled={refreshing}>{refreshing ? '刷新中' : '刷新'}</button></>} />
+      <PageTitle title="订阅组详情" subtitle="查看订阅组内聚合动态，支持聚合列表、按源分组与日历切换" actions={<><button onClick={() => setPage('groups')}><ArrowLeft size={18} />返回列表</button><button onClick={openEdit} disabled={editBusy || refreshing}><Edit3 size={17} />编辑</button><button onClick={reloadAll} disabled={refreshing}>{refreshing ? '刷新中' : '刷新'}</button></>} />
       {error && <div className="form-error">{error}</div>}
       <section className="detail-hero group-hero">
         <div className="hero-title"><div className="big-icon"><Users size={36} /></div><div><h2>{group.name}</h2><p>{group.description}</p></div></div>
@@ -144,6 +182,7 @@ export default function GroupDetailPage({ groupId, setPage }) {
         {view === 'calendar' && <div className="calendar-layout"><CalendarGrid days={calendar} month={month} onMonthChange={(value) => { setDayItems(null); setMonth(value); }} onDayClick={setDayItems} />{dayItems && <DayEntriesPanel dayItems={dayItems} onClose={() => setDayItems(null)} onDetail={setDetail} />}</div>}
       </section>
       <EntryDetailModal entry={detail} onClose={() => setDetail(null)} />
+      {editing !== undefined && <GroupModal form={editForm} setForm={setEditForm} feeds={feeds} title="编辑订阅组" busy={editBusy} errors={editErrors} onClose={() => setEditing(undefined)} onSubmit={submitEdit} />}
     </>
   );
 }

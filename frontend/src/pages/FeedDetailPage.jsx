@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarDays, RefreshCw, Rss } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ClipboardList, RefreshCw, Rss } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import CalendarGrid from '../components/CalendarGrid';
@@ -25,6 +25,11 @@ export default function FeedDetailPage({ feedId, setPage }) {
   const [dayItems, setDayItems] = useState(null);
   const [page, setLocalPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [logs, setLogs] = useState([]);
+  const [logPage, setLogPage] = useState(1);
+  const [logPageSize, setLogPageSize] = useState(10);
+  const [fetching, setFetching] = useState(false);
+  const [fetchMessage, setFetchMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -42,6 +47,27 @@ export default function FeedDetailPage({ feedId, setPage }) {
   async function loadCalendar() {
     if (!feedId || view !== 'calendar') return;
     setCalendar(await api.get(`/feeds/${feedId}/calendar`, { month }));
+  }
+
+  async function loadLogs() {
+    if (!feedId) return;
+    setLogs(await api.get('/fetch-logs', { feed_id: feedId, limit: 200 }, { cache: false }));
+  }
+
+  async function triggerFetch() {
+    setFetching(true);
+    setFetchMessage('');
+    try {
+      const result = await api.post(`/feeds/${feedId}/refresh`, {});
+      await Promise.all([loadFeed(), loadLogs()]);
+      if (result?.result === 'failed') setFetchMessage(`抓取失败：${result.error || '未知错误'}`);
+      else if (result?.result === 'skipped') setFetchMessage('订阅已停用，跳过抓取');
+      else setFetchMessage('抓取成功');
+    } catch (err) {
+      setFetchMessage(err.message);
+    } finally {
+      setFetching(false);
+    }
   }
 
   async function load() {
@@ -81,14 +107,21 @@ export default function FeedDetailPage({ feedId, setPage }) {
     api.get(`/feeds/${feedId}/calendar`, { month }, { cache: false }).then((data) => { if (active) setCalendar(data); }).catch((err) => { if (active) setError(err.message); });
     return () => { active = false; };
   }, [feedId, view, month]);
+  useEffect(() => {
+    if (!feedId || view !== 'logs') return undefined;
+    let active = true;
+    api.get('/fetch-logs', { feed_id: feedId, limit: 200 }, { cache: false }).then((data) => { if (active) setLogs(data); }).catch((err) => { if (active) setError(err.message); });
+    return () => { active = false; };
+  }, [feedId, view]);
 
   if (loading) return <><PageTitle title="订阅详情" subtitle="正在加载订阅源信息..." /><LoadingState title="正在加载订阅源..." rows={4} /></>;
   if (!feed) return <><PageTitle title="订阅详情" subtitle="无法加载订阅源信息" actions={<button onClick={load}><RefreshCw size={17} />重试</button>} />{error && <div className="form-error">{error}</div>}</>;
 
   return (
     <>
-      <PageTitle title="订阅详情" subtitle="查看单个 RSS 源的基础信息、动态条目与日历分布" actions={<><button onClick={() => setPage('feeds')}><ArrowLeft size={18} />返回列表</button><button onClick={load} disabled={refreshing}><RefreshCw size={17} />{refreshing ? '刷新中' : '刷新'}</button></>} />
+      <PageTitle title="订阅详情" subtitle="查看单个 RSS 源的基础信息、动态条目与日历分布" actions={<><button onClick={() => setPage('feeds')}><ArrowLeft size={18} />返回列表</button><button onClick={triggerFetch} disabled={fetching || refreshing}><RefreshCw size={17} />{fetching ? '抓取中...' : '立即抓取'}</button><button onClick={load} disabled={refreshing}>{refreshing ? '刷新中' : '刷新'}</button></>} />
       {error && <div className="form-error">{error}</div>}
+      {fetchMessage && <div className="inline-status"><span>{fetchMessage}</span><button onClick={() => setFetchMessage('')}>关闭</button></div>}
       <section className="detail-hero">
         <div className="hero-title"><div className="big-icon rss"><Rss size={34} /></div><div><h2>{feed.name}</h2><p>{feed.description || '暂无描述'}</p></div></div>
         <div className="detail-columns">
@@ -97,10 +130,22 @@ export default function FeedDetailPage({ feedId, setPage }) {
         </div>
       </section>
       <section className="panel">
-        <div className="tabs"><button className={view === 'list' ? 'active' : ''} onClick={() => { setDayItems(null); setView('list'); }}>条目列表</button><button className={view === 'calendar' ? 'active' : ''} onClick={() => { setDayItems(null); setView('calendar'); }}><CalendarDays size={16} />日历视图</button><ClearableInput className="tabs-search" value={keyword} onChange={(value) => { setLocalPage(1); setKeyword(value); }} placeholder="搜索标题或摘要" label="订阅动态搜索" /></div>
-        {view === 'list' ? <><EntryTable entries={entries.items} onDetail={setDetail} /><Pagination total={entries.total} page={page} pageSize={pageSize} onPageChange={setLocalPage} onPageSizeChange={(size) => { setPageSize(size); setLocalPage(1); }} /></> : <div className="calendar-layout"><CalendarGrid days={calendar} month={month} onMonthChange={(value) => { setDayItems(null); setMonth(value); }} onDayClick={setDayItems} />{dayItems && <DayEntriesPanel dayItems={dayItems} onClose={() => setDayItems(null)} onDetail={setDetail} />}</div>}
+        <div className="tabs"><button className={view === 'list' ? 'active' : ''} onClick={() => { setDayItems(null); setView('list'); }}>条目列表</button><button className={view === 'calendar' ? 'active' : ''} onClick={() => { setDayItems(null); setView('calendar'); }}><CalendarDays size={16} />日历视图</button><button className={view === 'logs' ? 'active' : ''} onClick={() => { setDayItems(null); setView('logs'); }}><ClipboardList size={16} />抓取记录</button>{view !== 'logs' && <ClearableInput className="tabs-search" value={keyword} onChange={(value) => { setLocalPage(1); setKeyword(value); }} placeholder="搜索标题或摘要" label="订阅动态搜索" />}</div>
+        {view === 'list' && <><EntryTable entries={entries.items} onDetail={setDetail} /><Pagination total={entries.total} page={page} pageSize={pageSize} onPageChange={setLocalPage} onPageSizeChange={(size) => { setPageSize(size); setLocalPage(1); }} /></>}
+        {view === 'calendar' && <div className="calendar-layout"><CalendarGrid days={calendar} month={month} onMonthChange={(value) => { setDayItems(null); setMonth(value); }} onDayClick={setDayItems} />{dayItems && <DayEntriesPanel dayItems={dayItems} onClose={() => setDayItems(null)} onDetail={setDetail} />}</div>}
+        {view === 'logs' && <FetchLogsTable logs={logs} logPage={logPage} logPageSize={logPageSize} onPageChange={setLogPage} onPageSizeChange={(size) => { setLogPageSize(size); setLogPage(1); }} />}
       </section>
       <EntryDetailModal entry={detail} onClose={() => setDetail(null)} />
+    </>
+  );
+}
+
+function FetchLogsTable({ logs, logPage, logPageSize, onPageChange, onPageSizeChange }) {
+  const pagedLogs = getPageItems(logs, logPage, logPageSize);
+  return (
+    <>
+      <div className="table-wrap"><table className="data-table"><thead><tr><th>抓取时间</th><th>结果</th><th>新增条目</th><th>总条目</th><th>耗时(ms)</th><th>错误信息</th></tr></thead><tbody>{pagedLogs.map((log) => <tr key={log.id}><td>{formatDateTime(log.started_at)}</td><td><StatusPill status={log.result} /></td><td>{log.new_entries}</td><td>{log.total_entries}</td><td>{log.duration_ms ?? '-'}</td><td className="summary-cell">{log.error_message || '-'}</td></tr>)}{!logs.length && <tr><td colSpan="6" className="empty-cell">暂无抓取记录</td></tr>}</tbody></table></div>
+      <Pagination total={logs.length} page={logPage} pageSize={logPageSize} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} />
     </>
   );
 }

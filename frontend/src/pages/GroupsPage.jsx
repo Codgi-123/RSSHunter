@@ -153,7 +153,7 @@ export default function GroupsPage({ groups, feeds, reloadGroups, setPage, setSe
   );
 }
 
-function GroupModal({ title, form, setForm, feeds, busy, errors = {}, onClose, onSubmit }) {
+export function GroupModal({ title, form, setForm, feeds, busy, errors = {}, onClose, onSubmit }) {
   const [feedFilters, setFeedFilters] = useState({ keyword: '', vendor: '', product: '', db_type: '', tag: '', status: '', selected: '' });
   const feedTags = useMemo(() => [...new Set(feeds.flatMap((feed) => splitTags(feed.tags)))].filter(Boolean), [feeds]);
   const vendors = useMemo(() => unique(feeds, 'vendor'), [feeds]);

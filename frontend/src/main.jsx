@@ -10,7 +10,6 @@ import FeedsPage from './pages/FeedsPage';
 import GroupDetailPage from './pages/GroupDetailPage';
 import GroupsPage from './pages/GroupsPage';
 import OverviewPage from './pages/OverviewPage';
-import StatusPage from './pages/StatusPage';
 import './styles.css';
 
 const validPages = new Set(['overview', 'feeds', 'feed-detail', 'groups', 'group-detail', 'entries', 'status', 'docs']);
@@ -47,7 +46,6 @@ function App() {
   const [overview, setOverview] = useState({ stats: {}, trend: [], recent_feeds: [], groups: [], abnormal_feeds: [] });
   const [feeds, setFeeds] = useState([]);
   const [groups, setGroups] = useState([]);
-  const [logs, setLogs] = useState([]);
   const [selectedFeed, setSelectedFeed] = useState(() => readId('feedId'));
   const [selectedGroup, setSelectedGroup] = useState(() => readId('groupId'));
   const [error, setError] = useState('');
@@ -92,20 +90,16 @@ function App() {
     try { setGroups(await api.get('/groups', undefined, { cache: false })); }
     catch (err) { setError(err.message); }
   }, []);
-  const loadLogs = useCallback(async () => {
-    try { setLogs(await api.get('/fetch-logs', undefined, { cache: false })); }
-    catch (err) { setError(err.message); }
-  }, []);
   const loadAll = useCallback(async () => {
     setRefreshing(true);
     setError('');
     try {
-      await Promise.allSettled([loadOverview(), loadFeeds(), loadGroups(), loadLogs()]);
+      await Promise.allSettled([loadOverview(), loadFeeds(), loadGroups()]);
     } finally {
       setRefreshing(false);
       setInitialLoading(false);
     }
-  }, [loadOverview, loadFeeds, loadGroups, loadLogs]);
+  }, [loadOverview, loadFeeds, loadGroups]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
   useEffect(() => {
@@ -117,12 +111,11 @@ function App() {
     if (page === 'feeds') return <FeedsPage feeds={feeds} reloadFeeds={loadFeeds} setPage={setPage} setSelectedFeed={setSelectedFeed} />;
     if (page === 'feed-detail') return <FeedDetailPage feedId={selectedFeed || feeds[0]?.id} setPage={setPage} />;
     if (page === 'groups') return <GroupsPage groups={groups} feeds={feeds} reloadGroups={loadGroups} setPage={setPage} setSelectedGroup={setSelectedGroup} />;
-    if (page === 'group-detail') return <GroupDetailPage groupId={selectedGroup || groups[0]?.id} setPage={setPage} />;
+    if (page === 'group-detail') return <GroupDetailPage groupId={selectedGroup || groups[0]?.id} setPage={setPage} feeds={feeds} reloadGroups={loadGroups} />;
     if (page === 'entries') return <EntriesPage feeds={feeds} groups={groups} initialKeyword={globalKeyword} />;
-    if (page === 'status') return <StatusPage feeds={feeds} logs={logs} reloadFeeds={loadFeeds} reloadLogs={loadLogs} />;
     if (page === 'docs') return <DocsPage />;
     return <OverviewPage overview={overview} reloadOverview={loadOverview} setPage={setPage} setSelectedFeed={setSelectedFeed} setSelectedGroup={setSelectedGroup} />;
-  }, [page, feeds, groups, logs, overview, selectedFeed, selectedGroup, globalKeyword, loadOverview, loadFeeds, loadGroups, loadLogs]);
+  }, [page, feeds, groups, overview, selectedFeed, selectedGroup, globalKeyword, loadOverview, loadFeeds, loadGroups]);
 
   return (
     <Layout page={page} setPage={setPage} globalKeyword={globalKeyword} setGlobalKeyword={setGlobalKeyword}>

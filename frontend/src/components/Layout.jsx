@@ -1,4 +1,4 @@
-import { BookOpen, ChevronLeft, ChevronRight, Database, FileText, Home, List, Menu, Search, ShieldCheck, Users, X } from 'lucide-react';
+import { BookOpen, ChevronLeft, ChevronRight, Database, FileText, Home, List, Menu, Search, Users, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 const nav = [
@@ -6,7 +6,6 @@ const nav = [
   ['feeds', '订阅管理', FileText],
   ['groups', '订阅组管理', Users],
   ['entries', '全局动态', List],
-  ['status', '源状态', ShieldCheck],
   ['docs', 'API 文档', BookOpen],
 ];
 
