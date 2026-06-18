@@ -79,8 +79,6 @@ def init_db():
     conn = connect()
     conn.executescript(schema)
     migrate(conn)
-    seed(conn)
-    migrate(conn)
     conn.commit()
     conn.close()
 
@@ -315,42 +313,6 @@ def normalize_volcengine_feed_metadata(conn):
                WHERE id = ?""",
             (values["name"], values["vendor"], values["product"], values["tags"], values["description"], updated_at, feed["id"]),
         )
-
-
-def seed(conn):
-    count = one(conn.execute("SELECT COUNT(*) AS c FROM feeds"))["c"]
-    if count:
-        return
-    feeds = [
-        ("腾讯云向量数据库动态", TENCENT_VECTOR_RSS_URL, "腾讯云", "向量数据库", "向量数据库", "腾讯云,向量数据库", "腾讯云向量数据库产品更新 RSS"),
-        ("阿里云 RDS 动态", "https://rsshub.app/aliyun/news", "阿里云", "RDS", "关系型", "云厂商,关系型", "阿里云数据库更新动态"),
-        ("PostgreSQL 官方动态", "https://www.postgresql.org/about/newsarchive/rss/", "PostgreSQL", "PostgreSQL", "关系型", "PostgreSQL,开源", "PostgreSQL 官方新闻"),
-        ("Redis 官方更新", "https://redis.io/blog/feed/", "Redis", "Redis", "缓存", "Redis,缓存", "Redis 官方博客"),
-        ("MongoDB 官方动态", "https://www.mongodb.com/company/blog/rss", "MongoDB", "MongoDB", "文档数据库", "MongoDB,文档", "MongoDB 官方博客"),
-        *AWS_DATABASE_FEEDS,
-        *GOOGLE_CLOUD_DATABASE_FEEDS,
-    ]
-    for f in feeds:
-        conn.execute("INSERT INTO feeds(name, rss_url, vendor, product, db_type, tags, description) VALUES (?, ?, ?, ?, ?, ?, ?)", f)
-    groups = [
-        ("云厂商关系型数据库", "聚合 AWS、Google Cloud、阿里云等云厂商关系型数据库动态", "云厂商,关系型", "aggregate", 1, [2, 6, 14, 15, 16, 17, 18, 19, 20, 21]),
-        ("缓存数据库动态", "Redis 与云缓存数据库更新", "Redis,缓存", "aggregate", 1, [4, 8, 9, 25]),
-        ("PostgreSQL 生态", "PostgreSQL 官方及云厂商兼容产品更新", "PostgreSQL,关系型", "aggregate", 1, [3, 6, 18, 19, 20]),
-        ("向量数据库动态", "向量数据库产品公告和云厂商更新", "向量数据库,AI", "calendar", 1, [1]),
-        ("文档数据库动态", "MongoDB 及文档数据库生态动态", "MongoDB,文档", "aggregate", 1, [5, 10, 23, 24]),
-    ]
-    for name, desc, tags, view, enabled, feed_ids in groups:
-        cur = conn.execute("INSERT INTO groups(name, description, tags, default_view, enabled) VALUES (?, ?, ?, ?, ?)", (name, desc, tags, view, enabled))
-        gid = cur.lastrowid
-        for idx, fid in enumerate(feed_ids):
-            conn.execute("INSERT INTO group_feeds(group_id, feed_id, sort_order) VALUES (?, ?, ?)", (gid, fid, idx))
-    base = datetime.now(timezone.utc).replace(hour=9, minute=0, second=0, microsecond=0)
-    samples = ["PostgreSQL 17.4 Released", "Aurora PostgreSQL 版本更新", "Cloud SQL for PostgreSQL 新增功能", "Redis 8 发布候选版本", "MongoDB Atlas Search 更新", "腾讯云向量数据库能力升级", "AWS RDS 性能洞察更新"]
-    for i, title in enumerate(samples * 4):
-        feed_id = (i % len(feeds)) + 1
-        published = (base - timedelta(days=i % 12, hours=i)).isoformat()
-        conn.execute("INSERT OR IGNORE INTO entries(feed_id, guid, title, link, summary, published_at) VALUES (?, ?, ?, ?, ?, ?)", (feed_id, f"seed-{i}", title, "https://example.com/news/" + str(i), "数据库产品更新摘要，包含版本能力、性能、安全或兼容性改进。", published))
-    conn.execute("UPDATE feeds SET latest_item_published_at=(SELECT MAX(published_at) FROM entries WHERE entries.feed_id=feeds.id), last_fetched_at=?", (now_iso(),))
 
 
 @app.on_event("startup")
