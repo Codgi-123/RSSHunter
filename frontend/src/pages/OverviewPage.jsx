@@ -1,5 +1,6 @@
 import { AlertTriangle, Database, Eye, FileText, Folder, Layers, RefreshCw, Rss, Server, Share2, Users } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '../api';
 import ActionDialog from '../components/ActionDialog';
@@ -7,7 +8,9 @@ import MetricCard from '../components/MetricCard';
 import Pagination, { getPageItems } from '../components/Pagination';
 import StatusPill from '../components/StatusPill';
 import VendorBadge from '../components/VendorBadge';
+import LoadingState from '../components/LoadingState';
 import { PageTitle } from '../components/Layout';
+import { useInvalidateAll, useOverview } from '../queries';
 import { formatDateTime } from '../utils/format';
 
 function normalizeTrend(rows = []) {
@@ -22,7 +25,10 @@ function normalizeTrend(rows = []) {
 
 const groupIcons = [Database, Layers, Server, Share2, Folder];
 
-export default function OverviewPage({ overview, reloadOverview, setPage, setSelectedFeed, setSelectedGroup }) {
+export default function OverviewPage() {
+  const navigate = useNavigate();
+  const invalidate = useInvalidateAll();
+  const { data: overview = {}, isLoading } = useOverview();
   const [recentPage, setRecentPage] = useState(1);
   const [recentPageSize, setRecentPageSize] = useState(5);
   const [abnormalPage, setAbnormalPage] = useState(1);
@@ -37,13 +43,11 @@ export default function OverviewPage({ overview, reloadOverview, setPage, setSel
   const pagedAbnormalFeeds = getPageItems(abnormalFeeds, abnormalPage, abnormalPageSize);
 
   function openFeed(feed) {
-    setSelectedFeed?.(feed.id);
-    setPage('feed-detail');
+    navigate(`/feeds/${feed.id}`);
   }
 
   function openGroup(group) {
-    setSelectedGroup(group.id);
-    setPage('group-detail');
+    navigate(`/groups/${group.id}`);
   }
 
   async function retryFeed(feed) {
@@ -51,7 +55,7 @@ export default function OverviewPage({ overview, reloadOverview, setPage, setSel
     setMessage('');
     try {
       await api.post(`/feeds/${feed.id}/refresh`, {});
-      await reloadOverview?.();
+      await invalidate();
       setMessage(`订阅「${feed.name}」已重试`);
     } catch (err) {
       setMessage(err.message);
@@ -60,15 +64,17 @@ export default function OverviewPage({ overview, reloadOverview, setPage, setSel
     }
   }
 
+  if (isLoading) return <><PageTitle title="首页概览" subtitle="正在加载平台数据..." /><LoadingState title="正在加载平台数据..." rows={4} /></>;
+
   return (
     <>
       <PageTitle title="首页概览" subtitle="快速查看 RSS 平台整体状态、最新动态与异常订阅源" />
       {message && <div className="inline-status"><span>{message}</span><button onClick={() => setMessage('')}>关闭</button></div>}
       <section className="metric-grid">
-        <MetricCard icon={FileText} label="今日新增动态" value={stats.today_entries ?? 0} hint="今日新增的动态条目总数" onClick={() => setPage('entries')} />
-        <MetricCard icon={Rss} label="订阅源总数" value={stats.feed_count ?? 0} tone="green" hint="当前已配置的 RSS 订阅源总数" onClick={() => setPage('feeds')} />
-        <MetricCard icon={Users} label="订阅组总数" value={stats.group_count ?? 0} tone="purple" hint="当前已创建的订阅组总数" onClick={() => setPage('groups')} />
-        <MetricCard icon={AlertTriangle} label="异常订阅源" value={stats.abnormal_count ?? 0} tone="red" hint="当前存在异常的订阅源数量" onClick={() => setPage('status')} />
+        <MetricCard icon={FileText} label="今日新增动态" value={stats.today_entries ?? 0} hint="今日新增的动态条目总数" onClick={() => navigate('/entries')} />
+        <MetricCard icon={Rss} label="订阅源总数" value={stats.feed_count ?? 0} tone="green" hint="当前已配置的 RSS 订阅源总数" onClick={() => navigate('/feeds')} />
+        <MetricCard icon={Users} label="订阅组总数" value={stats.group_count ?? 0} tone="purple" hint="当前已创建的订阅组总数" onClick={() => navigate('/groups')} />
+        <MetricCard icon={AlertTriangle} label="异常订阅源" value={stats.abnormal_count ?? 0} tone="red" hint="当前存在异常的订阅源数量" onClick={() => navigate('/status')} />
       </section>
 
       <section className="content-split">
@@ -86,7 +92,7 @@ export default function OverviewPage({ overview, reloadOverview, setPage, setSel
           </ResponsiveContainer>
         </div>
         <div className="panel">
-          <div className="panel-header"><h2>最近更新订阅源</h2><button className="link-button" onClick={() => setPage('feeds')}>查看更多</button></div>
+          <div className="panel-header"><h2>最近更新订阅源</h2><button className="link-button" onClick={() => navigate('/feeds')}>查看更多</button></div>
           <table className="data-table compact-table">
             <thead><tr><th>订阅源名称</th><th>最近更新时间</th><th>今日新增</th></tr></thead>
             <tbody>
@@ -105,7 +111,7 @@ export default function OverviewPage({ overview, reloadOverview, setPage, setSel
       </section>
 
       <section className="panel">
-        <div className="panel-header"><h2>常用订阅组</h2><button className="link-button" onClick={() => setPage('groups')}>管理订阅组</button></div>
+        <div className="panel-header"><h2>常用订阅组</h2><button className="link-button" onClick={() => navigate('/groups')}>管理订阅组</button></div>
         <div className="quick-group-grid">
           {(overview.groups || []).map((group, index) => {
             const GroupIcon = groupIcons[index % groupIcons.length];
@@ -124,7 +130,7 @@ export default function OverviewPage({ overview, reloadOverview, setPage, setSel
       </section>
 
       <section className="panel">
-        <div className="panel-header"><h2>异常订阅源</h2><button className="link-button" onClick={() => setPage('status')}>查看更多</button></div>
+        <div className="panel-header"><h2>异常订阅源</h2><button className="link-button" onClick={() => navigate('/status')}>查看更多</button></div>
         <table className="data-table">
           <thead><tr><th>订阅名称</th><th>厂商</th><th>产品</th><th>异常类型</th><th>最近抓取时间</th><th>操作</th></tr></thead>
           <tbody>

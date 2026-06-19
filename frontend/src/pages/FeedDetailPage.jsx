@@ -1,5 +1,6 @@
 import { ArrowLeft, CalendarDays, ClipboardList, RefreshCw, Rss } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import CalendarGrid from '../components/CalendarGrid';
 import CopyButton from '../components/CopyButton';
@@ -12,12 +13,14 @@ import Pagination, { getPageItems } from '../components/Pagination';
 import StatusPill from '../components/StatusPill';
 import TagList from '../components/TagList';
 import VendorBadge from '../components/VendorBadge';
+import { useFeed, useFeedCalendar, useFeedEntries, useFetchLogs, useInvalidateAll } from '../queries';
 import { formatDateTime } from '../utils/format';
 
-export default function FeedDetailPage({ feedId, setPage }) {
-  const [feed, setFeed] = useState(null);
-  const [entries, setEntries] = useState({ total: 0, items: [] });
-  const [calendar, setCalendar] = useState([]);
+export default function FeedDetailPage() {
+  const navigate = useNavigate();
+  const invalidate = useInvalidateAll();
+  const { feedId: feedIdParam } = useParams();
+  const feedId = Number(feedIdParam);
   const [view, setView] = useState('list');
   const [keyword, setKeyword] = useState('');
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -25,41 +28,23 @@ export default function FeedDetailPage({ feedId, setPage }) {
   const [dayItems, setDayItems] = useState(null);
   const [page, setLocalPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [logs, setLogs] = useState([]);
   const [logPage, setLogPage] = useState(1);
   const [logPageSize, setLogPageSize] = useState(10);
   const [fetching, setFetching] = useState(false);
   const [fetchMessage, setFetchMessage] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState('');
 
-  async function loadFeed() {
-    if (!feedId) return;
-    setFeed(await api.get(`/feeds/${feedId}`));
-  }
-
-  async function loadEntries() {
-    if (!feedId) return;
-    setEntries(await api.get(`/feeds/${feedId}/entries`, { keyword, limit: pageSize, offset: (page - 1) * pageSize }));
-  }
-
-  async function loadCalendar() {
-    if (!feedId || view !== 'calendar') return;
-    setCalendar(await api.get(`/feeds/${feedId}/calendar`, { month }));
-  }
-
-  async function loadLogs() {
-    if (!feedId) return;
-    setLogs(await api.get('/fetch-logs', { feed_id: feedId, limit: 200 }, { cache: false }));
-  }
+  const { data: feed, isLoading: loading, error: feedError, refetch } = useFeed(feedId);
+  const { data: entries = { total: 0, items: [] }, error: entriesError } = useFeedEntries(feedId, { keyword, limit: pageSize, offset: (page - 1) * pageSize });
+  const { data: calendar = [] } = useFeedCalendar(feedId, month, view === 'calendar');
+  const { data: logs = [] } = useFetchLogs(feedId, view === 'logs');
+  const error = (feedError || entriesError)?.message || '';
 
   async function triggerFetch() {
     setFetching(true);
     setFetchMessage('');
     try {
       const result = await api.post(`/feeds/${feedId}/refresh`, {});
-      await Promise.all([loadFeed(), loadLogs()]);
+      await invalidate();
       if (result?.result === 'failed') setFetchMessage(`抓取失败：${result.error || '未知错误'}`);
       else if (result?.result === 'skipped') setFetchMessage('订阅已停用，跳过抓取');
       else setFetchMessage('抓取成功');
@@ -70,56 +55,12 @@ export default function FeedDetailPage({ feedId, setPage }) {
     }
   }
 
-  async function load() {
-    setRefreshing(true);
-    setError('');
-    try {
-      await Promise.all([loadFeed(), loadEntries(), loadCalendar()]);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setRefreshing(false);
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError('');
-    if (!feedId) {
-      setFeed(null);
-      setLoading(false);
-      return () => { active = false; };
-    }
-    api.get(`/feeds/${feedId}`, undefined, { cache: false }).then((data) => { if (active) setFeed(data); }).catch((err) => { if (active) setError(err.message); }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [feedId]);
-  useEffect(() => {
-    if (!feedId) return undefined;
-    let active = true;
-    api.get(`/feeds/${feedId}/entries`, { keyword, limit: pageSize, offset: (page - 1) * pageSize }, { cache: false }).then((data) => { if (active) setEntries(data); }).catch((err) => { if (active) setError(err.message); });
-    return () => { active = false; };
-  }, [feedId, keyword, page, pageSize]);
-  useEffect(() => {
-    if (!feedId || view !== 'calendar') return undefined;
-    let active = true;
-    api.get(`/feeds/${feedId}/calendar`, { month }, { cache: false }).then((data) => { if (active) setCalendar(data); }).catch((err) => { if (active) setError(err.message); });
-    return () => { active = false; };
-  }, [feedId, view, month]);
-  useEffect(() => {
-    if (!feedId || view !== 'logs') return undefined;
-    let active = true;
-    api.get('/fetch-logs', { feed_id: feedId, limit: 200 }, { cache: false }).then((data) => { if (active) setLogs(data); }).catch((err) => { if (active) setError(err.message); });
-    return () => { active = false; };
-  }, [feedId, view]);
-
   if (loading) return <><PageTitle title="订阅详情" subtitle="正在加载订阅源信息..." /><LoadingState title="正在加载订阅源..." rows={4} /></>;
-  if (!feed) return <><PageTitle title="订阅详情" subtitle="无法加载订阅源信息" actions={<button onClick={load}><RefreshCw size={17} />重试</button>} />{error && <div className="form-error">{error}</div>}</>;
+  if (!feed) return <><PageTitle title="订阅详情" subtitle="无法加载订阅源信息" actions={<button onClick={() => refetch()}><RefreshCw size={17} />重试</button>} />{error && <div className="form-error">{error}</div>}</>;
 
   return (
     <>
-      <PageTitle title="订阅详情" subtitle="查看单个 RSS 源的基础信息、动态条目与日历分布" actions={<><button onClick={() => setPage('feeds')}><ArrowLeft size={18} />返回列表</button><button onClick={triggerFetch} disabled={fetching || refreshing}><RefreshCw size={17} />{fetching ? '抓取中...' : '立即抓取'}</button><button onClick={load} disabled={refreshing}>{refreshing ? '刷新中' : '刷新'}</button></>} />
+      <PageTitle title="订阅详情" subtitle="查看单个 RSS 源的基础信息、动态条目与日历分布" actions={<><button onClick={() => navigate(-1)}><ArrowLeft size={18} />返回列表</button><button onClick={triggerFetch} disabled={fetching}><RefreshCw size={17} />{fetching ? '抓取中...' : '立即抓取'}</button><button onClick={() => invalidate()}>刷新</button></>} />
       {error && <div className="form-error">{error}</div>}
       {fetchMessage && <div className="inline-status"><span>{fetchMessage}</span><button onClick={() => setFetchMessage('')}>关闭</button></div>}
       <section className="detail-hero">

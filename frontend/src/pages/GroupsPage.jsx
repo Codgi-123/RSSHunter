@@ -1,15 +1,18 @@
 import { Database, Edit3, Eye, Folder, Layers, Plus, Search, Server, Share2, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import ActionDialog from '../components/ActionDialog';
 import CopyButton from '../components/CopyButton';
 import { ClearableInput, ClearableSelect } from '../components/FilterControls';
 import { PageTitle } from '../components/Layout';
+import LoadingState from '../components/LoadingState';
 import Modal from '../components/Modal';
 import Pagination, { getPageItems } from '../components/Pagination';
 import StatusPill from '../components/StatusPill';
 import TagInput from '../components/TagInput';
 import TagList from '../components/TagList';
+import { useFeeds, useGroups, useInvalidateAll } from '../queries';
 import { formatDateTime, splitTags, unique } from '../utils/format';
 
 const groupIcons = [Database, Layers, Server, Share2, Folder];
@@ -26,16 +29,33 @@ function validateGroupForm(form) {
   return errors;
 }
 
-export default function GroupsPage({ groups, feeds, reloadGroups, setPage, setSelectedGroup }) {
-  const [keyword, setKeyword] = useState('');
-  const [status, setStatus] = useState('');
+export default function GroupsPage() {
+  const navigate = useNavigate();
+  const invalidate = useInvalidateAll();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const keyword = searchParams.get('keyword') || '';
+  const status = searchParams.get('status') || '';
+  const page = Number(searchParams.get('page')) || 1;
+  const pageSize = Number(searchParams.get('pageSize')) || 10;
+  const { data: groups = [], isLoading } = useGroups();
+  const { data: feeds = [] } = useFeeds();
   const [editing, setEditing] = useState(undefined);
   const [form, setForm] = useState(newGroupForm());
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [formErrors, setFormErrors] = useState({});
-  const [page, setLocalPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+
+  function patchParams(patch) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      Object.entries(patch).forEach(([key, value]) => {
+        if (value === '' || value == null) next.delete(key);
+        else next.set(key, String(value));
+      });
+      return next;
+    }, { replace: true });
+  }
+
   const visibleGroups = useMemo(() => groups.filter((group) => (!keyword || `${group.id}${group.name}${group.description}`.includes(keyword)) && (!status || Boolean(group.enabled) === (status === 'enabled'))), [groups, keyword, status]);
   const pagedGroups = useMemo(() => getPageItems(visibleGroups, page, pageSize), [visibleGroups, page, pageSize]);
 
@@ -56,7 +76,7 @@ export default function GroupsPage({ groups, feeds, reloadGroups, setPage, setSe
   async function hydrateAndEdit(group) {
     setBusy(true);
     try {
-      openEdit(await api.get(`/groups/${group.id}`, undefined, { cache: false }));
+      openEdit(await api.get(`/groups/${group.id}`));
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -74,7 +94,7 @@ export default function GroupsPage({ groups, feeds, reloadGroups, setPage, setSe
       if (editing) await api.put(`/groups/${editing.id}`, payload);
       else await api.post('/groups', payload);
       setEditing(undefined);
-      await reloadGroups();
+      await invalidate();
       setMessage(editing ? '订阅组已更新' : '订阅组已创建');
     } catch (err) {
       setMessage(err.message);
@@ -88,7 +108,7 @@ export default function GroupsPage({ groups, feeds, reloadGroups, setPage, setSe
     setBusy(true);
     try {
       await api.delete(`/groups/${group.id}`);
-      await reloadGroups();
+      await invalidate();
       setMessage('订阅组已删除');
     } catch (err) {
       setMessage(err.message);
@@ -98,19 +118,18 @@ export default function GroupsPage({ groups, feeds, reloadGroups, setPage, setSe
   }
 
   function openGroup(group) {
-    setSelectedGroup(group.id);
-    setPage('group-detail');
+    navigate(`/groups/${group.id}`);
   }
 
   function updateKeyword(value) {
-    setLocalPage(1);
-    setKeyword(value);
+    patchParams({ keyword: value, page: '' });
   }
 
   function updateStatus(value) {
-    setLocalPage(1);
-    setStatus(value);
+    patchParams({ status: value, page: '' });
   }
+
+  if (isLoading) return <><PageTitle title="订阅组管理" subtitle="正在加载订阅组..." /><LoadingState title="正在加载订阅组..." rows={3} /></>;
 
   return (
     <>
@@ -147,7 +166,7 @@ export default function GroupsPage({ groups, feeds, reloadGroups, setPage, setSe
         })}
       </section>
       {!visibleGroups.length && <section className="panel state-panel">暂无匹配的订阅组</section>}
-      <Pagination total={visibleGroups.length} page={page} pageSize={pageSize} onPageChange={setLocalPage} onPageSizeChange={(size) => { setPageSize(size); setLocalPage(1); }} />
+      <Pagination total={visibleGroups.length} page={page} pageSize={pageSize} onPageChange={(next) => patchParams({ page: next === 1 ? '' : next })} onPageSizeChange={(size) => patchParams({ pageSize: size, page: '' })} />
       {editing !== undefined && <GroupModal form={form} setForm={setForm} feeds={feeds} title={editing ? '编辑订阅组' : '新增订阅组'} busy={busy} errors={formErrors} onClose={() => setEditing(undefined)} onSubmit={submitGroup} />}
     </>
   );

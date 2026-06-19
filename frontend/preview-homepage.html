@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RSSHunter — 首页预览稿</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wdth,wght@0,75..100,400..700;1,75..100,400..500&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ── design tokens ── */
+    :root {
+      --bg:         #edeae3;
+      --surface:    #f4f1ea;
+      --panel:      #ffffff;
+      --sidebar:    #131110;
+      --sidebar-2:  #1d1a16;
+      --ink:        #1a1714;
+      --ink-2:      #403c38;
+      --muted:      #7a7368;
+      --rule:       #d6d1c9;
+      --rule-dark:  #2a2420;
+      --teal:       #0c7169;
+      --teal-d:     #0a5e54;
+      --teal-bg:    #e4f3f1;
+      --teal-dim:   rgba(12,113,105,0.10);
+      --ember:      #be3b0c;
+      --ember-bg:   #fce8e2;
+      --amber:      #b45309;
+      --green:      #166534;
+      --f-ui:       "Instrument Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+      --f-mono:     "Fira Code", "Cascadia Code", "Consolas", monospace;
+      --ease:       cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    /* ── reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--f-ui);
+      font-size: 14px;
+      line-height: 1.5;
+      background: var(--bg);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    button { font: inherit; cursor: pointer; border: none; background: none; }
+    a { color: var(--teal); text-decoration: none; }
+    svg { display: block; flex-shrink: 0; }
+
+    /* ── shell ── */
+    .shell { display: flex; min-height: 100vh; }
+
+    /* ── sidebar ── */
+    .sidebar {
+      width: 216px;
+      flex: 0 0 216px;
+      background: var(--sidebar);
+      display: flex;
+      flex-direction: column;
+      padding: 26px 14px 22px;
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      border-right: 1px solid rgba(255,255,255,0.04);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 8px;
+      margin-bottom: 34px;
+    }
+    .brand-icon {
+      width: 30px; height: 30px; flex: 0 0 30px;
+      background: var(--teal);
+      border-radius: 7px;
+      display: grid;
+      place-items: center;
+    }
+    .brand-icon svg { color: #fff; }
+    .brand-text { line-height: 1.25; }
+    .brand-name {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.92);
+      letter-spacing: 0.01em;
+    }
+    .brand-sub {
+      display: block;
+      font-size: 10px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.32);
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    .nav { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+    .nav a {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      color: rgba(255,255,255,0.42);
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: color 0.14s, background 0.14s;
+    }
+    .nav a:hover { color: rgba(255,255,255,0.72); background: rgba(255,255,255,0.06); }
+    .nav a.active { color: #fff; background: rgba(12,113,105,0.26); }
+    .nav a.active .nav-icon { color: #4ec9c0; }
+    .nav-icon { color: rgba(255,255,255,0.28); }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding-top: 16px;
+      border-top: 1px solid var(--rule-dark);
+    }
+    .live-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      color: rgba(255,255,255,0.34);
+      font-size: 11px;
+      font-family: var(--f-mono);
+      letter-spacing: 0.05em;
+    }
+    .live-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #4ec9c0;
+      flex: 0 0 6px;
+      animation: pulse 2.2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgba(78,201,192,0.45); }
+      55%      { opacity: 0.6; box-shadow: 0 0 0 5px rgba(78,201,192,0); }
+    }
+
+    /* ── main area ── */
+    .main {
+      flex: 1;
+      margin-left: 216px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── topbar ── */
+    .topbar {
+      height: 50px;
+      flex: 0 0 50px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--rule);
+      display: flex;
+      align-items: center;
+      padding: 0 26px;
+      gap: 16px;
+      justify-content: space-between;
+    }
+    .topbar-stamp {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--f-mono);
+      font-size: 11.5px;
+      color: var(--muted);
+      letter-spacing: 0.03em;
+    }
+    .stamp-date { color: var(--ink-2); font-weight: 500; }
+    .stamp-sep { color: var(--rule); }
+    .search-wrap {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--panel);
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      padding: 0 10px;
+      height: 32px;
+      width: 264px;
+      transition: border-color 0.15s;
+    }
+    .search-wrap:focus-within { border-color: var(--teal); }
+    .search-wrap svg { color: var(--muted); }
+    .search-wrap input {
+      border: none; background: none;
+      font: inherit; font-size: 12.5px;
+      color: var(--ink); flex: 1; outline: none;
+    }
+    .search-wrap input::placeholder { color: var(--muted); }
+
+    /* ── page body ── */
+    .body { padding: 26px 26px 52px; display: flex; flex-direction: column; gap: 22px; }
+
+    /* ── metrics strip (signature element) ── */
+    .metrics-strip {
+      background: var(--panel);
+      border: 1px solid var(--rule);
+      border-radius: 11px;
+      overflow: hidden;
+    }
+    .strip-header {
+      padding: 11px 22px;
+      border-bottom: 1px solid var(--rule);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .strip-eyebrow {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .strip-time {
+      font-family: var(--f-mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .metrics-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+    }
+    .metric-block {
+      padding: 26px 22px 22px;
+      border-right: 1px solid var(--rule);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: relative;
+      transition: background 0.14s;
+      cursor: pointer;
+    }
+    .metric-block:last-child { border-right: none; }
+    .metric-block:hover { background: var(--teal-bg); }
+    .metric-block.danger { background: var(--ember-bg); }
+    .metric-block.danger:hover { background: #faddda; }
+    .metric-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .metric-num {
+      font-family: var(--f-mono);
+      font-size: 58px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: -0.035em;
+      color: var(--ink);
+      transition: color 0.18s;
+    }
+    .metric-block:hover .metric-num { color: var(--teal); }
+    .metric-block.danger .metric-num { color: var(--ember); }
+    .metric-sub {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .metric-bar {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--teal);
+      opacity: 0;
+      transition: opacity 0.18s;
+    }
+    .metric-block:hover .metric-bar { opacity: 1; }
+    .metric-block.danger .metric-bar { background: var(--ember); opacity: 1; }
+
+    /* ── chart panel ── */
+    .chart-panel {
+      background: var(--panel);
+      border: 1px solid var(--rule);
+      border-radius: 11px;
+      overflow: hidden;
+    }
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--rule);
+    }
+    .panel-title { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+    .panel-badge {
+      font-family: var(--f-mono);
+      font-size: 11px;
+      font-weight: 500;
+      padding: 3px 9px;
+      border-radius: 100px;
+      background: var(--teal-bg);
+      color: var(--teal);
+    }
+    .chart-area { padding: 10px 18px 6px; }
+    .chart-svg { width: 100%; overflow: visible; }
+    .g-line { stroke: var(--rule); stroke-width: 0.6; stroke-dasharray: 3 4; }
+    .ax-label { font-family: var(--f-mono); font-size: 10px; fill: var(--muted); }
+    .data-fill { fill: url(#grad); opacity: 0; animation: fill-in 0.5s ease forwards 1.55s; }
+    .data-line {
+      fill: none; stroke: var(--teal); stroke-width: 2.5;
+      stroke-linecap: round; stroke-linejoin: round;
+      stroke-dasharray: 900; stroke-dashoffset: 900;
+      animation: draw 1.4s var(--ease) forwards 0.35s;
+    }
+    .data-dot {
+      fill: var(--panel); stroke: var(--teal); stroke-width: 2;
+      opacity: 0; transform-origin: center; transform-box: fill-box;
+      animation: dot-pop 0.22s var(--ease) forwards;
+    }
+    @keyframes draw    { to { stroke-dashoffset: 0; } }
+    @keyframes fill-in { to { opacity: 1; } }
+    @keyframes dot-pop { from { opacity:0; transform: scale(0); } to { opacity:1; transform: scale(1); } }
+
+    /* ── two-col grid ── */
+    .grid-2 { display: grid; grid-template-columns: 1.45fr 1fr; gap: 18px; }
+
+    /* ── feeds table panel ── */
+    .table-panel {
+      background: var(--panel);
+      border: 1px solid var(--rule);
+      border-radius: 11px;
+      overflow: hidden;
+    }
+    .panel-more {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--teal);
+    }
+    .ft { width: 100%; border-collapse: collapse; }
+    .ft th {
+      padding: 10px 18px;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-align: left;
+      background: var(--surface);
+      border-bottom: 1px solid var(--rule);
+      white-space: nowrap;
+    }
+    .ft td {
+      padding: 12px 18px;
+      font-size: 13px;
+      border-bottom: 1px solid rgba(214,209,201,0.5);
+      color: var(--ink-2);
+      vertical-align: middle;
+    }
+    .ft tr:last-child td { border-bottom: none; }
+    .ft tbody tr { transition: background 0.12s; }
+    .ft tbody tr:hover { background: #faf8f4; }
+    .feed-name-cell {
+      display: flex; align-items: center; gap: 7px;
+      font-weight: 600; color: var(--ink);
+    }
+    .feed-name-cell svg { color: #aaa8a2; }
+    .mono { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); }
+    .count { font-family: var(--f-mono); font-weight: 600; font-size: 14px; color: var(--teal); }
+    .count-nil { font-family: var(--f-mono); font-size: 13px; color: var(--muted); }
+
+    /* ── anomaly panel ── */
+    .anomaly-panel {
+      background: var(--panel);
+      border: 1px solid var(--rule);
+      border-radius: 11px;
+      overflow: hidden;
+    }
+    .anomaly-list { display: flex; flex-direction: column; }
+    .anomaly-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(214,209,201,0.5);
+      border-left: 3px solid var(--ember);
+      transition: background 0.12s;
+    }
+    .anomaly-item:last-child { border-bottom: none; }
+    .anomaly-item:hover { background: #fdf5f2; }
+    .anom-icon {
+      width: 34px; height: 34px; flex: 0 0 34px;
+      border-radius: 50%;
+      background: var(--ember-bg);
+      display: grid; place-items: center;
+      color: var(--ember);
+    }
+    .anom-body { flex: 1; min-width: 0; }
+    .anom-name {
+      font-size: 13px; font-weight: 600; color: var(--ink);
+      margin-bottom: 4px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .anom-meta { display: flex; align-items: center; gap: 7px; }
+    .stag {
+      display: inline-flex; align-items: center;
+      padding: 2px 7px; border-radius: 100px;
+      font-size: 10.5px; font-weight: 700;
+    }
+    .stag-err { background: var(--ember-bg); color: var(--ember); }
+    .stag-warn { background: #fef3c7; color: var(--amber); }
+    .anom-btn {
+      padding: 5px 10px;
+      font-size: 11.5px; font-weight: 600;
+      border: 1px solid var(--rule);
+      border-radius: 5px;
+      color: var(--ink-2);
+      background: var(--surface);
+      white-space: nowrap;
+      transition: border-color 0.13s, background 0.13s, color 0.13s;
+    }
+    .anom-btn:hover { border-color: var(--teal); background: var(--teal-bg); color: var(--teal); }
+
+    /* ── groups section ── */
+    .sec-head {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 13px;
+    }
+    .sec-title { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+    .sec-link {
+      display: flex; align-items: center; gap: 3px;
+      font-size: 12px; font-weight: 600; color: var(--teal);
+    }
+    .group-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 13px; }
+    .group-card {
+      background: var(--panel);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      padding: 17px;
+      display: flex; flex-direction: column; gap: 11px;
+      transition: border-color 0.15s, box-shadow 0.2s, transform 0.15s;
+      cursor: pointer;
+    }
+    .group-card:hover {
+      border-color: #b4cec8;
+      box-shadow: 0 6px 18px rgba(12,113,105,0.09);
+      transform: translateY(-1px);
+    }
+    .gsym {
+      width: 36px; height: 36px;
+      border-radius: 7px;
+      display: grid; place-items: center;
+      font-size: 14px; font-weight: 700;
+    }
+    .g0 { background: var(--teal-bg); color: var(--teal); }
+    .g1 { background: var(--ember-bg); color: var(--ember); }
+    .g2 { background: #fef3c7; color: var(--amber); }
+    .g3 { background: #dcfce7; color: var(--green); }
+    .g4 { background: #ede9fe; color: #6d28d9; }
+    .gname {
+      font-size: 13px; font-weight: 600; color: var(--ink);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .gstats { display: flex; flex-direction: column; gap: 4px; }
+    .gstat {
+      display: flex; justify-content: space-between;
+      font-size: 11.5px; color: var(--muted);
+    }
+    .gstat b { font-family: var(--f-mono); font-weight: 600; font-size: 12px; color: var(--ink-2); }
+
+    /* ── staggered entrance ── */
+    .fi { opacity: 0; transform: translateY(7px); animation: fi 0.48s var(--ease) forwards; }
+    .d1 { animation-delay: 0.04s; }
+    .d2 { animation-delay: 0.11s; }
+    .d3 { animation-delay: 0.19s; }
+    .d4 { animation-delay: 0.27s; }
+    .d5 { animation-delay: 0.35s; }
+    @keyframes fi { to { opacity: 1; transform: translateY(0); } }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <div class="brand-name">RSSHunter</div>
+        <span class="brand-sub">数据库动态监控</span>
+      </div>
+    </div>
+
+    <ul class="nav">
+      <li><a href="#" class="active">
+        <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+        首页概览
+      </a></li>
+      <li><a href="#">
+        <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+        订阅管理
+      </a></li>
+      <li><a href="#">
+        <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        订阅组管理
+      </a></li>
+      <li><a href="#">
+        <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        全局动态
+      </a></li>
+      <li><a href="#">
+        <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        订阅日历
+      </a></li>
+      <li><a href="#">
+        <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        源状态
+      </a></li>
+      <li><a href="#">
+        <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        API 文档
+      </a></li>
+    </ul>
+
+    <div class="sidebar-footer">
+      <div class="live-row">
+        <span class="live-dot"></span>
+        LIVE · 实时监控中
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <div class="topbar-stamp">
+        <span class="stamp-date">2026.06.18</span>
+        <span class="stamp-sep">·</span>
+        <span>星期三</span>
+        <span class="stamp-sep">·</span>
+        <span>上次刷新 14:32</span>
+      </div>
+      <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" placeholder="搜索订阅源、动态或厂商…">
+      </div>
+    </header>
+
+    <div class="body">
+
+      <!-- ① Metrics strip — signature element: 58px Fira Code numerals -->
+      <div class="metrics-strip fi d1">
+        <div class="strip-header">
+          <span class="strip-eyebrow">平台概览</span>
+          <span class="strip-time">2026 / 06 / 18 · Wed</span>
+        </div>
+        <div class="metrics-row">
+          <div class="metric-block">
+            <span class="metric-label">今日新增</span>
+            <span class="metric-num" data-count="47">0</span>
+            <span class="metric-sub">较昨日 +18%</span>
+            <div class="metric-bar"></div>
+          </div>
+          <div class="metric-block">
+            <span class="metric-label">订阅源总数</span>
+            <span class="metric-num" data-count="128">0</span>
+            <span class="metric-sub">已启用 124 个</span>
+            <div class="metric-bar"></div>
+          </div>
+          <div class="metric-block">
+            <span class="metric-label">订阅组</span>
+            <span class="metric-num" data-count="12">0</span>
+            <span class="metric-sub">含 128 个订阅源</span>
+            <div class="metric-bar"></div>
+          </div>
+          <div class="metric-block danger">
+            <span class="metric-label">异常订阅源</span>
+            <span class="metric-num" data-count="3">0</span>
+            <span class="metric-sub">需要关注</span>
+            <div class="metric-bar"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ② Trend chart -->
+      <div class="chart-panel fi d2">
+        <div class="panel-head">
+          <span class="panel-title">近 7 日动态趋势</span>
+          <span class="panel-badge">过去 7 天</span>
+        </div>
+        <div class="chart-area">
+          <svg class="chart-svg" viewBox="0 0 840 195" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stop-color="#0c7169" stop-opacity="0.20"/>
+                <stop offset="100%" stop-color="#0c7169" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <!-- horizontal grid lines: 0=180, 20=134, 40=88, 60=43 -->
+            <line x1="60" y1="180" x2="820" y2="180" class="g-line"/>
+            <line x1="60" y1="134" x2="820" y2="134" class="g-line"/>
+            <line x1="60" y1="88"  x2="820" y2="88"  class="g-line"/>
+            <line x1="60" y1="43"  x2="820" y2="43"  class="g-line"/>
+            <!-- y-axis labels -->
+            <text x="50" y="183" class="ax-label" text-anchor="end">0</text>
+            <text x="50" y="137" class="ax-label" text-anchor="end">20</text>
+            <text x="50" y="91"  class="ax-label" text-anchor="end">40</text>
+            <text x="50" y="46"  class="ax-label" text-anchor="end">60</text>
+            <!-- x-axis labels for 06/12–06/18 -->
+            <text x="110" y="193" class="ax-label" text-anchor="middle">06/12</text>
+            <text x="228" y="193" class="ax-label" text-anchor="middle">06/13</text>
+            <text x="346" y="193" class="ax-label" text-anchor="middle">06/14</text>
+            <text x="464" y="193" class="ax-label" text-anchor="middle">06/15</text>
+            <text x="582" y="193" class="ax-label" text-anchor="middle">06/16</text>
+            <text x="700" y="193" class="ax-label" text-anchor="middle">06/17</text>
+            <text x="818" y="193" class="ax-label" text-anchor="middle">06/18</text>
+            <!-- data values: 23,41,18,67,34,52,47 -->
+            <!-- y = 180 - (v/70)*160  =>  127, 87, 139, 27, 103, 61, 73 -->
+            <path class="data-fill"
+              d="M110,127 L228,87 L346,139 L464,27 L582,103 L700,61 L818,73 L818,180 L110,180 Z"/>
+            <path class="data-line"
+              d="M110,127 L228,87 L346,139 L464,27 L582,103 L700,61 L818,73"/>
+            <circle class="data-dot" cx="110" cy="127" r="4" style="animation-delay:0.80s"/>
+            <circle class="data-dot" cx="228" cy="87"  r="4" style="animation-delay:0.92s"/>
+            <circle class="data-dot" cx="346" cy="139" r="4" style="animation-delay:1.03s"/>
+            <circle class="data-dot" cx="464" cy="27"  r="4" style="animation-delay:1.10s"/>
+            <circle class="data-dot" cx="582" cy="103" r="4" style="animation-delay:1.17s"/>
+            <circle class="data-dot" cx="700" cy="61"  r="4" style="animation-delay:1.24s"/>
+            <circle class="data-dot" cx="818" cy="73"  r="4" style="animation-delay:1.30s"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- ③ Two-column: recent feeds + anomalies -->
+      <div class="grid-2">
+
+        <div class="table-panel fi d3">
+          <div class="panel-head">
+            <span class="panel-title">最近更新订阅源</span>
+            <a href="#" class="panel-more">
+              查看全部
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </a>
+          </div>
+          <table class="ft">
+            <thead>
+              <tr>
+                <th>订阅源</th>
+                <th>最近更新</th>
+                <th>今日</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><div class="feed-name-cell"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>PostgreSQL 发布公告</div></td>
+                <td><span class="mono">14:21 · 今天</span></td>
+                <td><span class="count">12</span></td>
+              </tr>
+              <tr>
+                <td><div class="feed-name-cell"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>AWS RDS 更新日志</div></td>
+                <td><span class="mono">13:05 · 今天</span></td>
+                <td><span class="count">8</span></td>
+              </tr>
+              <tr>
+                <td><div class="feed-name-cell"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>Redis 安全公告</div></td>
+                <td><span class="mono">11:47 · 今天</span></td>
+                <td><span class="count">5</span></td>
+              </tr>
+              <tr>
+                <td><div class="feed-name-cell"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>MongoDB 版本历史</div></td>
+                <td><span class="mono">10:30 · 今天</span></td>
+                <td><span class="count">3</span></td>
+              </tr>
+              <tr>
+                <td><div class="feed-name-cell"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>阿里云 RDS 动态</div></td>
+                <td><span class="mono">09:12 · 今天</span></td>
+                <td><span class="count">2</span></td>
+              </tr>
+              <tr>
+                <td><div class="feed-name-cell"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>TiDB 社区动态</div></td>
+                <td><span class="mono">昨天 22:58</span></td>
+                <td><span class="count-nil">—</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="anomaly-panel fi d4">
+          <div class="panel-head">
+            <span class="panel-title">异常订阅源</span>
+            <a href="#" class="panel-more">
+              全部状态
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </a>
+          </div>
+          <div class="anomaly-list">
+            <div class="anomaly-item">
+              <div class="anom-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              </div>
+              <div class="anom-body">
+                <div class="anom-name">OceanBase 官方博客</div>
+                <div class="anom-meta">
+                  <span class="stag stag-err">抓取失败</span>
+                  <span class="mono" style="font-size:11px">06/16 09:33</span>
+                </div>
+              </div>
+              <button class="anom-btn">重试</button>
+            </div>
+            <div class="anomaly-item">
+              <div class="anom-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              </div>
+              <div class="anom-body">
+                <div class="anom-name">PolarDB-X 发布历史</div>
+                <div class="anom-meta">
+                  <span class="stag stag-warn">响应超时</span>
+                  <span class="mono" style="font-size:11px">06/17 21:04</span>
+                </div>
+              </div>
+              <button class="anom-btn">重试</button>
+            </div>
+            <div class="anomaly-item">
+              <div class="anom-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              </div>
+              <div class="anom-body">
+                <div class="anom-name">Google Cloud Spanner</div>
+                <div class="anom-meta">
+                  <span class="stag stag-err">已禁用</span>
+                  <span class="mono" style="font-size:11px">06/14 16:50</span>
+                </div>
+              </div>
+              <button class="anom-btn">查看</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ④ Groups -->
+      <div class="fi d5">
+        <div class="sec-head">
+          <span class="sec-title">常用订阅组</span>
+          <a href="#" class="sec-link">
+            管理订阅组
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+        </div>
+        <div class="group-grid">
+          <div class="group-card">
+            <div class="gsym g0">云</div>
+            <div class="gname">主流云数据库</div>
+            <div class="gstats">
+              <div class="gstat"><span>订阅数</span><b>34</b></div>
+              <div class="gstat"><span>今日新增</span><b>18</b></div>
+            </div>
+          </div>
+          <div class="group-card">
+            <div class="gsym g1">开</div>
+            <div class="gname">开源数据库社区</div>
+            <div class="gstats">
+              <div class="gstat"><span>订阅数</span><b>28</b></div>
+              <div class="gstat"><span>今日新增</span><b>12</b></div>
+            </div>
+          </div>
+          <div class="group-card">
+            <div class="gsym g2">安</div>
+            <div class="gname">安全公告</div>
+            <div class="gstats">
+              <div class="gstat"><span>订阅数</span><b>15</b></div>
+              <div class="gstat"><span>今日新增</span><b>7</b></div>
+            </div>
+          </div>
+          <div class="group-card">
+            <div class="gsym g3">国</div>
+            <div class="gname">国产数据库</div>
+            <div class="gstats">
+              <div class="gstat"><span>订阅数</span><b>22</b></div>
+              <div class="gstat"><span>今日新增</span><b>5</b></div>
+            </div>
+          </div>
+          <div class="group-card">
+            <div class="gsym g4">内</div>
+            <div class="gname">内存数据库</div>
+            <div class="gstats">
+              <div class="gstat"><span>订阅数</span><b>11</b></div>
+              <div class="gstat"><span>今日新增</span><b>5</b></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /body -->
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<script>
+  // Number count-up
+  const ease = t => 1 - Math.pow(1 - t, 3);
+  document.querySelectorAll('[data-count]').forEach(el => {
+    const target = +el.dataset.count;
+    const dur = 1100, delay = 180;
+    setTimeout(() => {
+      const t0 = Date.now();
+      (function tick() {
+        const p = Math.min((Date.now() - t0) / dur, 1);
+        el.textContent = Math.round(ease(p) * target);
+        if (p < 1) requestAnimationFrame(tick);
+      })();
+    }, delay);
+  });
+</script>
+</body>
+</html>

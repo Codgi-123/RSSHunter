@@ -1,5 +1,6 @@
 import { AlertTriangle, ChevronDown, ChevronUp, ChevronsUpDown, Download, Edit3, Eye, PauseCircle, Plus, RefreshCw, Rss, Search, ShieldCheck, Trash2, Upload } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import ActionDialog from '../components/ActionDialog';
 import CopyButton from '../components/CopyButton';
@@ -12,6 +13,7 @@ import StatusPill from '../components/StatusPill';
 import TagInput from '../components/TagInput';
 import TagList from '../components/TagList';
 import VendorBadge from '../components/VendorBadge';
+import { useFeeds, useInvalidateAll } from '../queries';
 import { formatDateTime, splitTags, unique } from '../utils/format';
 
 const emptyFeed = { name: '', rss_url: '', vendor: '', product: '', db_type: '关系型', tags: [], description: '', enabled: true };
@@ -60,37 +62,43 @@ function compareField(a, b, key) {
   return String(a[key] ?? '').localeCompare(String(b[key] ?? ''), 'zh-Hans-CN', { numeric: true });
 }
 
-export default function FeedsPage({ feeds, reloadFeeds, setPage, setSelectedFeed }) {
-  const [filters, setFilters] = useState({ keyword: '', vendor: '', product: '', db_type: '', status: '' });
-  const [items, setItems] = useState(feeds);
+export default function FeedsPage() {
+  const navigate = useNavigate();
+  const invalidate = useInvalidateAll();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = {
+    keyword: searchParams.get('keyword') || '',
+    vendor: searchParams.get('vendor') || '',
+    product: searchParams.get('product') || '',
+    db_type: searchParams.get('db_type') || '',
+    status: searchParams.get('status') || '',
+  };
+  const page = Number(searchParams.get('page')) || 1;
+  const pageSize = Number(searchParams.get('pageSize')) || 10;
+  const sort = { key: searchParams.get('sortKey') || 'id', direction: searchParams.get('sortDir') || 'asc' };
+
+  const { data: items = [], isLoading: listLoading, isFetching } = useFeeds(filters);
+  const { data: allFeeds = [] } = useFeeds();
   const [editing, setEditing] = useState(undefined);
   const [form, setForm] = useState(newFeedForm());
   const [busy, setBusy] = useState(false);
   const [busyFeedId, setBusyFeedId] = useState(null);
-  const [listLoading, setListLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [formErrors, setFormErrors] = useState({});
   const [bulkOpen, setBulkOpen] = useState(false);
-  const [page, setLocalPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [sort, setSort] = useState({ key: 'id', direction: 'asc' });
 
-  useEffect(() => { setItems(feeds); }, [feeds]);
-  useEffect(() => {
-    let active = true;
-    const handle = setTimeout(async () => {
-      setListLoading(true);
-      try {
-        const data = await api.get('/feeds', filters, { cache: false });
-        if (active) setItems(data);
-      } catch (err) {
-        if (active) setMessage(err.message);
-      } finally {
-        if (active) setListLoading(false);
-      }
-    }, 180);
-    return () => { active = false; clearTimeout(handle); };
-  }, [filters]);
+  // URL search params hold all list state, so leaving and returning (or sharing
+  // the link) restores filters, sort and page; ScrollRestoration handles scroll.
+  function patchParams(patch) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      Object.entries(patch).forEach(([key, value]) => {
+        if (value === '' || value == null) next.delete(key);
+        else next.set(key, String(value));
+      });
+      return next;
+    }, { replace: true });
+  }
 
   const stats = useMemo(() => ({
     total: items.length,
@@ -99,9 +107,9 @@ export default function FeedsPage({ feeds, reloadFeeds, setPage, setSelectedFeed
     disabled: items.filter((feed) => !feed.enabled).length,
   }), [items]);
 
-  const vendors = unique(feeds, 'vendor');
-  const products = unique(feeds, 'product');
-  const dbTypes = unique(feeds, 'db_type');
+  const vendors = unique(allFeeds, 'vendor');
+  const products = unique(allFeeds, 'product');
+  const dbTypes = unique(allFeeds, 'db_type');
   const sortedItems = useMemo(() => {
     const nextItems = [...items].sort((a, b) => compareField(a, b, sort.key));
     return sort.direction === 'desc' ? nextItems.reverse() : nextItems;
@@ -109,12 +117,11 @@ export default function FeedsPage({ feeds, reloadFeeds, setPage, setSelectedFeed
   const pagedItems = useMemo(() => getPageItems(sortedItems, page, pageSize), [sortedItems, page, pageSize]);
 
   function updateSort(key) {
-    setSort((current) => ({ key, direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc' }));
+    patchParams({ sortKey: key, sortDir: sort.key === key && sort.direction === 'asc' ? 'desc' : 'asc' });
   }
 
   function updateFilter(key, value) {
-    setLocalPage(1);
-    setFilters({ ...filters, [key]: value });
+    patchParams({ [key]: value, page: '' });
   }
 
   function openCreate() {
@@ -137,18 +144,6 @@ export default function FeedsPage({ feeds, reloadFeeds, setPage, setSelectedFeed
     setFormErrors({});
   }
 
-  async function reloadList() {
-    setListLoading(true);
-    try {
-      await reloadFeeds();
-      setItems(await api.get('/feeds', filters, { cache: false }));
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setListLoading(false);
-    }
-  }
-
   async function submitFeed() {
     const errors = validateFeedForm(form);
     setFormErrors(errors);
@@ -160,7 +155,7 @@ export default function FeedsPage({ feeds, reloadFeeds, setPage, setSelectedFeed
       if (editing) await api.put(`/feeds/${editing.id}`, payload);
       else await api.post('/feeds', payload);
       closeModal();
-      await reloadList();
+      await invalidate();
       setMessage(editing ? '订阅已更新' : '订阅已创建');
     } catch (err) {
       setMessage(err.message);
@@ -172,7 +167,7 @@ export default function FeedsPage({ feeds, reloadFeeds, setPage, setSelectedFeed
     setBusyFeedId(feed.id);
     try {
       await api.delete(`/feeds/${feed.id}`);
-      await reloadList();
+      await invalidate();
       setMessage('订阅已删除');
     } catch (err) {
       setMessage(err.message);
@@ -185,7 +180,7 @@ export default function FeedsPage({ feeds, reloadFeeds, setPage, setSelectedFeed
     setBusyFeedId(feed.id);
     try {
       await api.post(`/feeds/${feed.id}/refresh`, {});
-      await reloadList();
+      await invalidate();
       setMessage('订阅刷新完成');
     } catch (err) {
       setMessage(err.message);
@@ -203,13 +198,13 @@ export default function FeedsPage({ feeds, reloadFeeds, setPage, setSelectedFeed
         <ClearableSelect value={filters.product} onChange={(value) => updateFilter('product', value)} label="产品"><option value="">产品</option>{products.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
         <ClearableSelect value={filters.db_type} onChange={(value) => updateFilter('db_type', value)} label="数据库类型"><option value="">数据库类型</option>{dbTypes.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
         <ClearableSelect value={filters.status} onChange={(value) => updateFilter('status', value)} label="状态"><option value="">状态</option><option value="normal">正常</option><option value="fetch_failed">抓取失败</option><option value="parse_error">解析异常</option></ClearableSelect>
-        <button onClick={() => { setLocalPage(1); setFilters({ keyword: '', vendor: '', product: '', db_type: '', status: '' }); }}><RefreshCw size={16} />重置筛选</button>
+        <button onClick={() => setSearchParams({}, { replace: true })}><RefreshCw size={16} />重置筛选</button>
       </section>
 
       <section className="metric-grid"><MetricCard icon={Rss} label="订阅源总数" value={stats.total} hint="所有订阅源数量" /><MetricCard icon={ShieldCheck} label="正常订阅源" value={stats.ok} tone="green" hint="运行正常的订阅源" /><MetricCard icon={AlertTriangle} label="异常订阅源" value={stats.bad} tone="red" hint="存在异常的订阅源" /><MetricCard icon={PauseCircle} label="停用订阅源" value={stats.disabled} tone="gray" hint="已停用的订阅源" /></section>
 
       <section className="panel">
-        <div className="panel-header"><h2>RSS 订阅列表</h2><div className="header-tools"><button onClick={() => exportFeeds(sortedItems)} disabled={!sortedItems.length}><Download size={16} />导出</button><button onClick={reloadList} disabled={listLoading}><RefreshCw size={16} />{listLoading ? '刷新中' : '刷新列表'}</button></div></div>
+        <div className="panel-header"><h2>RSS 订阅列表</h2><div className="header-tools"><button onClick={() => exportFeeds(sortedItems)} disabled={!sortedItems.length}><Download size={16} />导出</button><button onClick={() => invalidate()} disabled={isFetching}><RefreshCw size={16} />{isFetching ? '刷新中' : '刷新列表'}</button></div></div>
         {message && <div className="inline-status"><span>{message}</span><button onClick={() => setMessage('')}>关闭</button></div>}
         <div className="table-wrap">
           <table className="data-table">
@@ -217,7 +212,7 @@ export default function FeedsPage({ feeds, reloadFeeds, setPage, setSelectedFeed
             <tbody>
               {!listLoading && pagedItems.map((feed) => (
                 <tr key={feed.id}>
-                  <td><button className="table-title-link cell-with-icon" onClick={() => { setSelectedFeed(feed.id); setPage('feed-detail'); }}><Rss size={15} />{feed.name}</button></td>
+                  <td><button className="table-title-link cell-with-icon" onClick={() => navigate(`/feeds/${feed.id}`)}><Rss size={15} />{feed.name}</button></td>
                   <td><VendorBadge vendor={feed.vendor} /></td>
                   <td>{feed.product}</td>
                   <td>{feed.db_type}</td>
@@ -229,7 +224,7 @@ export default function FeedsPage({ feeds, reloadFeeds, setPage, setSelectedFeed
                     <ActionDialog
                       title={feed.name}
                       actions={[
-                        { label: '查看详情', icon: <Eye size={16} />, onClick: () => { setSelectedFeed(feed.id); setPage('feed-detail'); } },
+                        { label: '查看详情', icon: <Eye size={16} />, onClick: () => navigate(`/feeds/${feed.id}`) },
                         { label: '编辑订阅', icon: <Edit3 size={16} />, onClick: () => openEdit(feed) },
                         { label: feed.status === 'normal' ? '刷新订阅' : '重试抓取', icon: <RefreshCw size={16} />, primary: true, disabled: busyFeedId === feed.id, onClick: () => refreshFeed(feed) },
                         { label: '删除订阅', icon: <Trash2 size={16} />, danger: true, disabled: busyFeedId === feed.id, onClick: () => deleteFeed(feed) },
@@ -243,11 +238,11 @@ export default function FeedsPage({ feeds, reloadFeeds, setPage, setSelectedFeed
             </tbody>
           </table>
         </div>
-        <Pagination total={sortedItems.length} page={page} pageSize={pageSize} onPageChange={setLocalPage} onPageSizeChange={(size) => { setPageSize(size); setLocalPage(1); }} />
+        <Pagination total={sortedItems.length} page={page} pageSize={pageSize} onPageChange={(next) => patchParams({ page: next === 1 ? '' : next })} onPageSizeChange={(size) => patchParams({ pageSize: size, page: '' })} />
       </section>
 
       {editing !== undefined && <FeedModal title={editing ? '编辑订阅' : '新增订阅'} form={form} setForm={setForm} busy={busy} errors={formErrors} onClose={closeModal} onSubmit={submitFeed} />}
-      {bulkOpen && <BulkImportModal busy={busy} setBusy={setBusy} onClose={() => setBulkOpen(false)} onDone={reloadList} />}
+      {bulkOpen && <BulkImportModal busy={busy} setBusy={setBusy} onClose={() => setBulkOpen(false)} onDone={invalidate} />}
     </>
   );
 }

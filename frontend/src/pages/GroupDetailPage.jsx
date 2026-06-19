@@ -1,5 +1,6 @@
 import { ArrowLeft, CalendarDays, Database, Edit3, Grid2X2, List, Search, Users } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import CalendarGrid from '../components/CalendarGrid';
 import CopyButton from '../components/CopyButton';
@@ -13,15 +14,16 @@ import Pagination, { getPageItems } from '../components/Pagination';
 import StatusPill from '../components/StatusPill';
 import SummaryContent from '../components/SummaryContent';
 import TagList from '../components/TagList';
+import { useFeeds, useGroup, useGroupCalendar, useGroupEntries, useGroupEntriesBySource, useInvalidateAll } from '../queries';
 import { formatDateTime, splitTags, unique } from '../utils/format';
 import { viewLabel } from '../utils/view';
 import { GroupModal } from './GroupsPage';
 
-export default function GroupDetailPage({ groupId, setPage, feeds = [], reloadGroups }) {
-  const [group, setGroup] = useState(null);
-  const [entries, setEntries] = useState({ total: 0, items: [] });
-  const [bySource, setBySource] = useState([]);
-  const [calendar, setCalendar] = useState([]);
+export default function GroupDetailPage() {
+  const navigate = useNavigate();
+  const invalidate = useInvalidateAll();
+  const { groupId: groupIdParam } = useParams();
+  const groupId = Number(groupIdParam);
   const [view, setView] = useState('aggregate');
   const [filters, setFilters] = useState({ keyword: '', vendor: '', product: '', start: '', end: '' });
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -29,92 +31,23 @@ export default function GroupDetailPage({ groupId, setPage, feeds = [], reloadGr
   const [dayItems, setDayItems] = useState(null);
   const [page, setLocalPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState('');
-  const [todayCount, setTodayCount] = useState(null);
-  const [weekCount, setWeekCount] = useState(null);
   const [editing, setEditing] = useState(undefined);
   const [editForm, setEditForm] = useState({});
   const [editBusy, setEditBusy] = useState(false);
   const [editErrors, setEditErrors] = useState({});
 
-  async function loadGroup() {
-    if (!groupId) return;
-    setGroup(await api.get(`/groups/${groupId}`));
-  }
-
-  async function loadEntries() {
-    if (!groupId) return;
-    const params = { ...filters, limit: pageSize, offset: (page - 1) * pageSize };
-    setEntries(await api.get(`/groups/${groupId}/entries`, params));
-  }
-
-  async function loadSource() {
-    if (!groupId || view !== 'source') return;
-    setBySource(await api.get(`/groups/${groupId}/entries-by-source`, filters));
-  }
-
-  async function loadCalendar() {
-    if (!groupId || view !== 'calendar') return;
-    setCalendar(await api.get(`/groups/${groupId}/calendar`, { ...filters, month }));
-  }
-
-  async function reloadAll() {
-    setRefreshing(true);
-    setError('');
-    try {
-      await Promise.all([loadGroup(), loadEntries(), loadSource(), loadCalendar()]);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setRefreshing(false);
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError('');
-    if (!groupId) {
-      setGroup(null);
-      setLoading(false);
-      return () => { active = false; };
-    }
-    api.get(`/groups/${groupId}`, undefined, { cache: false }).then((data) => { if (active) setGroup(data); }).catch((err) => { if (active) setError(err.message); }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [groupId]);
-  useEffect(() => {
-    if (!groupId) return undefined;
-    let active = true;
-    const today = new Date().toISOString().slice(0, 10);
-    const weekAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    Promise.all([
-      api.get(`/groups/${groupId}/entries`, { start: today, end: today, limit: 1 }, { cache: false }),
-      api.get(`/groups/${groupId}/entries`, { start: weekAgo, end: today, limit: 1 }, { cache: false }),
-    ]).then(([td, wk]) => { if (active) { setTodayCount(td.total); setWeekCount(wk.total); } }).catch(() => {});
-    return () => { active = false; };
-  }, [groupId]);
-  useEffect(() => {
-    if (!groupId) return undefined;
-    let active = true;
-    const params = { ...filters, limit: pageSize, offset: (page - 1) * pageSize };
-    api.get(`/groups/${groupId}/entries`, params, { cache: false }).then((data) => { if (active) setEntries(data); }).catch((err) => { if (active) setError(err.message); });
-    return () => { active = false; };
-  }, [groupId, filters.keyword, filters.vendor, filters.product, filters.start, filters.end, page, pageSize]);
-  useEffect(() => {
-    if (!groupId || view !== 'source') return undefined;
-    let active = true;
-    api.get(`/groups/${groupId}/entries-by-source`, filters, { cache: false }).then((data) => { if (active) setBySource(data); }).catch((err) => { if (active) setError(err.message); });
-    return () => { active = false; };
-  }, [groupId, filters.keyword, filters.vendor, filters.product, filters.start, filters.end, view]);
-  useEffect(() => {
-    if (!groupId || view !== 'calendar') return undefined;
-    let active = true;
-    api.get(`/groups/${groupId}/calendar`, { ...filters, month }, { cache: false }).then((data) => { if (active) setCalendar(data); }).catch((err) => { if (active) setError(err.message); });
-    return () => { active = false; };
-  }, [groupId, filters.keyword, filters.vendor, filters.product, filters.start, filters.end, view, month]);
+  const today = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const { data: group, isLoading: loading, error: groupError, refetch } = useGroup(groupId);
+  const { data: entries = { total: 0, items: [] }, error: entriesError } = useGroupEntries(groupId, { ...filters, limit: pageSize, offset: (page - 1) * pageSize });
+  const { data: bySource = [] } = useGroupEntriesBySource(groupId, filters, view === 'source');
+  const { data: calendar = [] } = useGroupCalendar(groupId, { ...filters, month }, view === 'calendar');
+  const { data: todayData } = useGroupEntries(groupId, { start: today, end: today, limit: 1 });
+  const { data: weekData } = useGroupEntries(groupId, { start: weekAgo, end: today, limit: 1 });
+  const { data: feeds = [] } = useFeeds();
+  const error = (groupError || entriesError)?.message || '';
+  const todayCount = todayData?.total ?? null;
+  const weekCount = weekData?.total ?? null;
 
   const vendors = useMemo(() => unique(group?.feeds || [], 'vendor'), [group]);
   const products = useMemo(() => unique(group?.feeds || [], 'product'), [group]);
@@ -130,18 +63,11 @@ export default function GroupDetailPage({ groupId, setPage, feeds = [], reloadGr
     setFilters({ keyword: '', vendor: '', product: '', start: '', end: '' });
   };
 
-  async function openEdit() {
+  function openEdit() {
+    if (!group) return;
     setEditErrors({});
-    setEditBusy(true);
-    try {
-      const data = await api.get(`/groups/${groupId}`, undefined, { cache: false });
-      setEditForm({ ...data, tags: splitTags(data.tags), feed_ids: (data.feeds || []).map((feed) => feed.id) });
-      setEditing(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setEditBusy(false);
-    }
+    setEditForm({ ...group, tags: splitTags(group.tags), feed_ids: (group.feeds || []).map((feed) => feed.id) });
+    setEditing(group);
   }
 
   async function submitEdit() {
@@ -155,19 +81,19 @@ export default function GroupDetailPage({ groupId, setPage, feeds = [], reloadGr
     try {
       await api.put(`/groups/${groupId}`, payload);
       setEditing(undefined);
-      await Promise.all([loadGroup(), reloadGroups?.()]);
+      await invalidate();
     } catch (err) {
-      setError(err.message);
+      setEditErrors({ name: err.message });
     } finally {
       setEditBusy(false);
     }
   }
 
   if (loading) return <><PageTitle title="订阅组详情" subtitle="正在加载订阅组信息..." /><LoadingState title="正在加载订阅组..." rows={4} /></>;
-  if (!group) return <><PageTitle title="订阅组详情" subtitle="无法加载订阅组信息" actions={<button onClick={reloadAll}><Database size={17} />重试</button>} />{error && <div className="form-error">{error}</div>}</>;
+  if (!group) return <><PageTitle title="订阅组详情" subtitle="无法加载订阅组信息" actions={<button onClick={() => refetch()}><Database size={17} />重试</button>} />{error && <div className="form-error">{error}</div>}</>;
   return (
     <>
-      <PageTitle title="订阅组详情" subtitle="查看订阅组内聚合动态，支持聚合列表、按源分组与日历切换" actions={<><button onClick={() => setPage('groups')}><ArrowLeft size={18} />返回列表</button><button onClick={openEdit} disabled={editBusy || refreshing}><Edit3 size={17} />编辑</button><button onClick={reloadAll} disabled={refreshing}>{refreshing ? '刷新中' : '刷新'}</button></>} />
+      <PageTitle title="订阅组详情" subtitle="查看订阅组内聚合动态，支持聚合列表、按源分组与日历切换" actions={<><button onClick={() => navigate(-1)}><ArrowLeft size={18} />返回列表</button><button onClick={openEdit} disabled={editBusy}><Edit3 size={17} />编辑</button><button onClick={() => invalidate()}>刷新</button></>} />
       {error && <div className="form-error">{error}</div>}
       <section className="detail-hero group-hero">
         <div className="hero-title"><div className="big-icon"><Users size={36} /></div><div><h2>{group.name}</h2><p>{group.description}</p></div></div>

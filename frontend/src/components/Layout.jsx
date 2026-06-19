@@ -1,28 +1,38 @@
 import { BookOpen, ChevronLeft, ChevronRight, Database, FileText, Home, List, Menu, Search, Users, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 const nav = [
-  ['overview', '首页概览', Home],
-  ['feeds', '订阅管理', FileText],
-  ['groups', '订阅组管理', Users],
-  ['entries', '全局动态', List],
-  ['docs', 'API 文档', BookOpen],
+  ['/', '首页概览', Home],
+  ['/feeds', '订阅管理', FileText],
+  ['/groups', '订阅组管理', Users],
+  ['/entries', '全局动态', List],
+  ['/docs', 'API 文档', BookOpen],
 ];
 
-export default function Layout({ page, setPage, globalKeyword, setGlobalKeyword, children }) {
+function isActive(pathname, path) {
+  return path === '/' ? pathname === '/' : pathname.startsWith(path);
+}
+
+export default function Layout({ children }) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [globalKeyword, setGlobalKeyword] = useState('');
   const mainRef = useRef(null);
 
   useEffect(() => {
+    setMobileOpen(false);
     const activeElement = document.activeElement;
     if (activeElement?.matches?.('input, textarea, select, [contenteditable="true"]')) return;
     mainRef.current?.focus({ preventScroll: true });
-  }, [page]);
+  }, [location.pathname]);
 
-  function go(nextPage) {
-    setPage(nextPage);
-    setMobileOpen(false);
+  function search(value) {
+    setGlobalKeyword(value);
+    const params = value.trim() ? `?keyword=${encodeURIComponent(value.trim())}` : '';
+    navigate(`/entries${params}`, { replace: location.pathname === '/entries' });
   }
 
   return (
@@ -30,13 +40,16 @@ export default function Layout({ page, setPage, globalKeyword, setGlobalKeyword,
       <a className="skip-link" href="#main-content">跳至主要内容</a>
       <button className="mobile-menu-button" type="button" aria-controls="app-sidebar" aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}><Menu size={20} />菜单</button>
       <aside className="sidebar" id="app-sidebar">
-        <div className="brand-mark"><Database size={28} /><strong>数据库动态 RSS 管理平台</strong></div>
+        <div className="brand-mark"><span className="brand-logo"><Database size={21} strokeWidth={2.25} /></span><strong>数据库动态 RSS 管理平台</strong></div>
         <nav className="side-nav" aria-label="主导航">
-          {nav.map(([id, label, Icon]) => (
-            <button key={id} type="button" title={label} aria-current={page === id ? 'page' : undefined} className={page === id ? 'active' : ''} onClick={() => go(id)}>
-              <Icon size={21} /><span>{label}</span>
-            </button>
-          ))}
+          {nav.map(([path, label, Icon]) => {
+            const active = isActive(location.pathname, path);
+            return (
+              <Link key={path} to={path} title={label} aria-current={active ? 'page' : undefined} className={active ? 'active' : ''}>
+                <Icon size={21} /><span>{label}</span>
+              </Link>
+            );
+          })}
         </nav>
         <button className="collapse-button" type="button" aria-expanded={!collapsed} aria-label={collapsed ? '展开菜单' : '收起菜单'} onClick={() => setCollapsed(!collapsed)}>{collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}<span>{collapsed ? '展开菜单' : '收起菜单'}</span></button>
       </aside>
@@ -44,8 +57,8 @@ export default function Layout({ page, setPage, globalKeyword, setGlobalKeyword,
       <main className="main-panel" id="main-content" ref={mainRef} tabIndex={-1}>
         <header className="topbar">
           <label className="top-search">
-            <input aria-label="全局搜索" value={globalKeyword} onChange={(event) => setGlobalKeyword(event.target.value)} placeholder="搜索订阅源、订阅组或动态..." />
-            {globalKeyword && <button type="button" className="search-clear-button" onClick={() => setGlobalKeyword('')} aria-label="清空搜索"><X size={16} /></button>}
+            <input aria-label="全局搜索" value={globalKeyword} onChange={(event) => search(event.target.value)} placeholder="搜索订阅源、订阅组或动态..." />
+            {globalKeyword && <button type="button" className="search-clear-button" onClick={() => search('')} aria-label="清空搜索"><X size={16} /></button>}
             <Search size={20} />
           </label>
         </header>

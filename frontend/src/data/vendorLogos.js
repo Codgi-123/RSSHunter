@@ -1,18 +1,18 @@
 export const vendorLogos = {
   AWS: {
-    src: '/vendor-logos/aws.ico',
+    src: '/vendor-logos/aws.svg',
     label: 'AWS',
-    source: 'https://aws.amazon.com/favicon.ico',
+    source: 'https://cdn.jsdelivr.net/gh/gilbarbara/logos@main/logos/aws.svg',
   },
   'Google Cloud': {
-    src: '/vendor-logos/google-cloud.ico',
+    src: '/vendor-logos/google-cloud.svg',
     label: 'Google Cloud',
-    source: 'https://cloud.google.com/favicon.ico',
+    source: 'https://cdn.jsdelivr.net/gh/gilbarbara/logos@main/logos/google-cloud.svg',
   },
   MongoDB: {
-    src: '/vendor-logos/mongodb.ico',
+    src: '/vendor-logos/mongodb.svg',
     label: 'MongoDB',
-    source: 'https://www.mongodb.com/favicon.ico',
+    source: 'https://cdn.jsdelivr.net/gh/gilbarbara/logos@main/logos/mongodb-icon.svg',
   },
   OceanBase: {
     src: '/vendor-logos/oceanbase.png',
@@ -25,28 +25,28 @@ export const vendorLogos = {
     source: 'https://github.com/polardb',
   },
   PostgreSQL: {
-    src: '/vendor-logos/postgresql.png',
+    src: '/vendor-logos/postgresql.svg',
     label: 'PostgreSQL',
-    source: 'https://www.postgresql.org/media/img/about/press/elephant.png',
+    source: 'https://cdn.jsdelivr.net/gh/gilbarbara/logos@main/logos/postgresql.svg',
   },
   Redis: {
-    src: '/vendor-logos/redis.ico',
+    src: '/vendor-logos/redis.svg',
     label: 'Redis',
-    source: 'https://redis.io/favicon.ico',
+    source: 'https://cdn.jsdelivr.net/gh/gilbarbara/logos@main/logos/redis.svg',
   },
   腾讯云: {
-    src: '/vendor-logos/tencent-cloud.ico',
+    src: '/vendor-logos/tencent-cloud.svg',
     label: '腾讯云',
-    source: 'https://cloud.tencent.com/favicon.ico',
+    source: 'https://www.vectorlogo.zone/logos/tencent/tencent-icon.svg',
   },
   阿里云: {
-    src: '/vendor-logos/alibaba-cloud.ico',
+    src: '/vendor-logos/alibaba-cloud.svg',
     label: '阿里云',
-    source: 'https://www.alibabacloud.com/favicon.ico',
+    source: 'https://www.vectorlogo.zone/logos/alibabacloud/alibabacloud-icon.svg',
   },
   Apache: {
-    src: '/vendor-logos/apache.ico',
+    src: '/vendor-logos/apache.svg',
     label: 'Apache',
-    source: 'https://hbase.apache.org/favicon.ico',
+    source: 'https://cdn.jsdelivr.net/gh/gilbarbara/logos@main/logos/apache.svg',
   },
 };

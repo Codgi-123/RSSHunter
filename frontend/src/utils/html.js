@@ -1,63 +1,31 @@
-const allowedTags = new Set(['a', 'b', 'blockquote', 'br', 'code', 'em', 'h1', 'h2', 'h3', 'h4', 'i', 'li', 'ol', 'p', 'pre', 'strong', 'u', 'ul']);
-const dangerousTags = new Set(['script', 'style', 'iframe', 'object', 'embed', 'svg', 'math', 'link', 'meta']);
-const allowedProtocols = new Set(['http:', 'https:', 'mailto:']);
+import DOMPurify from 'dompurify';
 
-function unwrapElement(element) {
-  const parent = element.parentNode;
-  if (!parent) return;
-  while (element.firstChild) parent.insertBefore(element.firstChild, element);
-  parent.removeChild(element);
-}
+const SANITIZE_CONFIG = {
+  ALLOWED_TAGS: ['a', 'b', 'blockquote', 'br', 'code', 'em', 'h1', 'h2', 'h3', 'h4', 'i', 'li', 'ol', 'p', 'pre', 'strong', 'u', 'ul'],
+  ALLOWED_ATTR: ['href', 'title'],
+  ALLOWED_URI_REGEXP: /^(?:https?:|mailto:)/i,
+};
 
-function sanitizeLink(element) {
-  const href = element.getAttribute('href');
-  if (!href) return;
-  try {
-    const url = new URL(href, window.location.origin);
-    if (!allowedProtocols.has(url.protocol)) {
-      element.removeAttribute('href');
-      return;
+// Force every surviving link to open safely in a new tab.
+if (typeof window !== 'undefined') {
+  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    if (node.tagName === 'A' && node.getAttribute('href')) {
+      node.setAttribute('target', '_blank');
+      node.setAttribute('rel', 'noreferrer');
     }
-    element.setAttribute('href', url.href);
-    element.setAttribute('target', '_blank');
-    element.setAttribute('rel', 'noreferrer');
-  } catch {
-    element.removeAttribute('href');
-  }
+  });
 }
 
 export function sanitizeHtml(value = '') {
-  if (!value) return '';
-  if (typeof window === 'undefined' || typeof DOMParser === 'undefined') return String(value);
-
-  const doc = new DOMParser().parseFromString(`<div>${value}</div>`, 'text/html');
-  const root = doc.body.firstElementChild;
-  if (!root) return '';
-
-  root.querySelectorAll('*').forEach((element) => {
-    const tag = element.tagName.toLowerCase();
-    if (dangerousTags.has(tag)) {
-      element.remove();
-      return;
-    }
-    if (!allowedTags.has(tag)) {
-      unwrapElement(element);
-      return;
-    }
-    [...element.attributes].forEach((attr) => {
-      if (tag !== 'a' || !['href', 'title'].includes(attr.name)) element.removeAttribute(attr.name);
-    });
-    if (tag === 'a') sanitizeLink(element);
-  });
-
-  return root.innerHTML.trim();
+  if (!value || typeof window === 'undefined') return String(value || '');
+  return DOMPurify.sanitize(value, SANITIZE_CONFIG).trim();
 }
 
 export function htmlToText(value = '') {
   if (!value) return '';
-  if (typeof document === 'undefined') return String(value).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-
+  const clean = sanitizeHtml(value);
+  if (typeof document === 'undefined') return clean.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   const element = document.createElement('div');
-  element.innerHTML = sanitizeHtml(value);
+  element.innerHTML = clean;
   return (element.textContent || '').replace(/\s+/g, ' ').trim();
 }

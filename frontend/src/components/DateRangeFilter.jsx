@@ -1,7 +1,8 @@
+import * as Popover from '@radix-ui/react-popover';
 import { DayPicker } from '@daypicker/react';
 import '@daypicker/react/style.css';
 import { CalendarDays, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 function parseDate(value) {
   if (!value) return undefined;
@@ -34,7 +35,6 @@ function monthRange(offset = 0) {
 export default function DateRangeFilter({ start = '', end = '', onChange }) {
   const [open, setOpen] = useState(false);
   const [compact, setCompact] = useState(false);
-  const ref = useRef(null);
   const selected = useMemo(() => {
     const from = parseDate(start);
     const to = parseDate(end);
@@ -48,19 +48,6 @@ export default function DateRangeFilter({ start = '', end = '', onChange }) {
     update();
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
-  }, []);
-
-  useEffect(() => {
-    function close(event) {
-      if (event.key === 'Escape') setOpen(false);
-      if (event.type === 'mousedown' && ref.current && !ref.current.contains(event.target)) setOpen(false);
-    }
-    document.addEventListener('keydown', close);
-    document.addEventListener('mousedown', close);
-    return () => {
-      document.removeEventListener('keydown', close);
-      document.removeEventListener('mousedown', close);
-    };
   }, []);
 
   function updateRange(range) {
@@ -82,14 +69,18 @@ export default function DateRangeFilter({ start = '', end = '', onChange }) {
   }
 
   return (
-    <div className="date-range-filter" ref={ref}>
-      <button type="button" className={`date-range-trigger ${start || end ? 'has-value' : ''}`} onClick={() => setOpen((value) => !value)} aria-label="选择时间范围" aria-expanded={open} aria-haspopup="dialog">
-        <CalendarDays size={16} />
-        <span>{label}</span>
-      </button>
-      {(start || end) && <button type="button" className="filter-clear-button date-clear-button" onClick={() => onChange({ start: '', end: '' })} aria-label="清空时间范围"><X size={14} /></button>}
-      {open && (
-        <div className="date-popover" role="dialog" aria-label="选择时间范围">
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <div className="date-range-filter">
+        <Popover.Trigger asChild>
+          <button type="button" className={`date-range-trigger ${start || end ? 'has-value' : ''}`} aria-label="选择时间范围">
+            <CalendarDays size={16} />
+            <span>{label}</span>
+          </button>
+        </Popover.Trigger>
+        {(start || end) && <button type="button" className="filter-clear-button date-clear-button" onClick={() => onChange({ start: '', end: '' })} aria-label="清空时间范围"><X size={14} /></button>}
+      </div>
+      <Popover.Portal>
+        <Popover.Content className="date-popover" role="dialog" aria-label="选择时间范围" align="start" sideOffset={8}>
           <div className="date-presets">
             {presets.map((p) => (
               <button key={p.label} type="button" className={activePreset === p.label ? 'primary-button' : ''} onClick={() => applyPreset(p.value)}>{p.label}</button>
@@ -100,8 +91,8 @@ export default function DateRangeFilter({ start = '', end = '', onChange }) {
             <span>{label}</span>
             <button type="button" className="primary-button" onClick={() => setOpen(false)}>关闭</button>
           </div>
-        </div>
-      )}
-    </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }

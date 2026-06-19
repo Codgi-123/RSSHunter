@@ -2,12 +2,17 @@ import { AlertTriangle, CheckCircle2, Clock, RefreshCw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { api } from '../api';
 import { PageTitle } from '../components/Layout';
+import LoadingState from '../components/LoadingState';
 import MetricCard from '../components/MetricCard';
 import Pagination, { getPageItems } from '../components/Pagination';
 import StatusPill from '../components/StatusPill';
+import { useFeeds, useFetchLogs, useInvalidateAll } from '../queries';
 import { formatDateTime } from '../utils/format';
 
-export default function StatusPage({ feeds, logs, reloadFeeds, reloadLogs }) {
+export default function StatusPage() {
+  const invalidate = useInvalidateAll();
+  const { data: feeds = [], isLoading: feedsLoading } = useFeeds();
+  const { data: logs = [], isLoading: logsLoading } = useFetchLogs();
   const [feedPage, setFeedPage] = useState(1);
   const [feedPageSize, setFeedPageSize] = useState(10);
   const [logPage, setLogPage] = useState(1);
@@ -24,7 +29,7 @@ export default function StatusPage({ feeds, logs, reloadFeeds, reloadLogs }) {
     setMessage('');
     try {
       const result = await api.post(`/feeds/${feed.id}/refresh`, {});
-      await Promise.all([reloadFeeds(), reloadLogs()]);
+      await invalidate();
       if (result?.result === 'failed') {
         setMessage(`订阅「${feed.name}」抓取失败：${result.error || '未知错误'}`);
       } else if (result?.result === 'skipped') {
@@ -43,14 +48,15 @@ export default function StatusPage({ feeds, logs, reloadFeeds, reloadLogs }) {
     setRefreshing(type);
     setMessage('');
     try {
-      if (type === 'feeds') await reloadFeeds();
-      else await reloadLogs();
+      await invalidate();
     } catch (err) {
       setMessage(err.message);
     } finally {
       setRefreshing('');
     }
   }
+
+  if (feedsLoading || logsLoading) return <><PageTitle title="源状态" subtitle="正在加载源状态..." /><LoadingState title="正在加载源状态..." rows={4} /></>;
 
   return (
     <>
