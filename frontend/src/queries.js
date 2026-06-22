@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { api } from './api';
 
@@ -7,6 +7,10 @@ import { api } from './api';
 
 export function useOverview() {
   return useQuery({ queryKey: ['overview'], queryFn: () => api.get('/overview') });
+}
+
+export function useSyncStatus() {
+  return useQuery({ queryKey: ['sync-status'], queryFn: () => api.get('/sync-status'), staleTime: 30 * 1000 });
 }
 
 export function useFeeds(filters) {
@@ -56,13 +60,6 @@ export function useEntries(params) {
 
 export function useCalendar(params, enabled = true) {
   return useQuery({ queryKey: ['calendar', params], queryFn: () => api.get('/calendar', params), enabled });
-}
-
-// Mutations clear the whole cache (matching the previous behaviour where every
-// write reset the custom cache), so any list/overview/detail refetches fresh.
-export function useMutate(mutationFn) {
-  const queryClient = useQueryClient();
-  return useMutation({ mutationFn, onSuccess: () => queryClient.invalidateQueries() });
 }
 
 export function useInvalidateAll() {

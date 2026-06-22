@@ -1,13 +1,13 @@
 import asyncio
 import json
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from .database import connect, db, one, rows
@@ -16,17 +16,6 @@ from .rss import fetch_feed, scheduler_loop
 app = FastAPI(title="ProductHunter API", version="1.0.0")
 origins = os.getenv("RSSHUNTER_CORS_ORIGINS", "*").split(",")
 app.add_middleware(CORSMiddleware, allow_origins=origins if origins != ["*"] else ["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
-
-SKILL_PUBLIC_DIR = Path(__file__).with_name("skill_public")
-SKILL_PACKAGE_DIR = SKILL_PUBLIC_DIR / "rss-group-digest"
-SKILL_PACKAGE_FILES = {
-    "SKILL.md",
-    "agents/openai.yaml",
-    "references/config-schema.md",
-    "references/conversation-flow.md",
-    "references/prompt-templates.md",
-}
-
 
 class FeedIn(BaseModel):
     name: str
@@ -70,249 +59,19 @@ def month_range(month: str) -> tuple[str, str] | None:
         start = datetime.strptime(month, "%Y-%m").date().replace(day=1)
     except ValueError:
         return None
+    # 下月一号减一天 = 本月最后一天，避免依赖被同名函数遮蔽的 stdlib calendar 模块。
     next_month = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
-    return start.isoformat(), (next_month - timedelta(days=1)).isoformat()
+    last = next_month - timedelta(days=1)
+    return start.isoformat(), last.isoformat()
 
 
 def init_db():
     schema = Path(__file__).with_name("schema.sql").read_text()
     conn = connect()
     conn.executescript(schema)
-    migrate(conn)
     conn.commit()
     conn.close()
 
-
-TENCENT_VECTOR_RSS_URL = "https://rsshub.codgi.xin/tencent/cloud/document/product-updates/向量数据库"
-
-AWS_DATABASE_FEEDS = [
-    ("Amazon Aurora 动态", "https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/auroraupdates.rss", "AWS", "Amazon Aurora", "关系型", "AWS,Amazon Aurora,关系型", "AWS Amazon Aurora 官方文档更新 RSS"),
-    ("Amazon DynamoDB 动态", "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/dynamodbupdates.rss", "AWS", "Amazon DynamoDB", "键值数据库", "AWS,Amazon DynamoDB,键值数据库", "AWS Amazon DynamoDB 官方文档更新 RSS"),
-    ("Amazon ElastiCache (Valkey/Redis OSS) 动态", "https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/amazon-elcr-release-notes.rss", "AWS", "Amazon ElastiCache (Valkey/Redis OSS)", "缓存", "AWS,Amazon ElastiCache,Valkey,Redis,缓存", "AWS Amazon ElastiCache for Valkey / Redis OSS 官方文档更新 RSS"),
-    ("Amazon DocumentDB 动态", "https://aws.amazon.com/blogs/database/category/database/amazon-document-db/feed/", "AWS", "Amazon DocumentDB", "文档数据库", "AWS,Amazon DocumentDB,文档数据库", "AWS Amazon DocumentDB 数据库博客 RSS"),
-    ("Amazon Neptune 动态", "https://docs.aws.amazon.com/neptune/latest/userguide/rssupdates.rss", "AWS", "Amazon Neptune", "图数据库", "AWS,Amazon Neptune,图数据库", "AWS Amazon Neptune 官方文档更新 RSS"),
-    ("Amazon Keyspaces for Apache Cassandra 动态", "https://aws.amazon.com/blogs/database/category/database/amazon-managed-apache-cassandra-service/feed/", "AWS", "Amazon Keyspaces for Apache Cassandra", "宽列数据库", "AWS,Amazon Keyspaces for Apache Cassandra,宽列数据库", "AWS Amazon Keyspaces for Apache Cassandra 数据库博客 RSS"),
-    ("Amazon Timestream 动态", "https://aws.amazon.com/blogs/database/category/database/amazon-timestream/feed/", "AWS", "Amazon Timestream", "时序数据库", "AWS,Amazon Timestream,时序数据库", "AWS Amazon Timestream 数据库博客 RSS"),
-    ("Amazon RDS 动态", "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rdsupdates.rss", "AWS", "Amazon RDS", "关系型", "AWS,Amazon RDS,关系型", "AWS Amazon RDS 官方文档更新 RSS"),
-]
-
-GOOGLE_CLOUD_DATABASE_FEEDS = [
-    ("Cloud SQL 动态", "https://docs.cloud.google.com/feeds/cloud-sql-release-notes.xml", "Google Cloud", "Cloud SQL", "关系型", "Google Cloud,Cloud SQL,MySQL,PostgreSQL,SQL Server,关系型", "Google Cloud SQL release notes RSS，覆盖 MySQL、PostgreSQL 和 SQL Server"),
-    ("AlloyDB for PostgreSQL 动态", "https://docs.cloud.google.com/feeds/alloydb-release-notes.xml", "Google Cloud", "AlloyDB for PostgreSQL", "关系型", "Google Cloud,AlloyDB,PostgreSQL,AlloyDB AI,关系型", "Google Cloud AlloyDB for PostgreSQL release notes RSS，覆盖 AlloyDB AI 相关更新"),
-    ("AlloyDB Omni 动态", "https://docs.cloud.google.com/feeds/alloydbomni-release-notes.xml", "Google Cloud", "AlloyDB Omni", "关系型", "Google Cloud,AlloyDB Omni,PostgreSQL,关系型", "Google Cloud AlloyDB Omni release notes RSS"),
-    ("Spanner 动态", "https://docs.cloud.google.com/feeds/spanner-release-notes.xml", "Google Cloud", "Spanner", "关系型", "Google Cloud,Spanner,Spanner Graph,vector search,关系型", "Google Cloud Spanner release notes RSS，覆盖 Spanner Graph 和 Spanner vector search"),
-    ("Bigtable 动态", "https://docs.cloud.google.com/feeds/bigtable-release-notes.xml", "Google Cloud", "Bigtable", "宽列数据库", "Google Cloud,Bigtable,vector search,宽列数据库", "Google Cloud Bigtable release notes RSS，覆盖 Bigtable vector search"),
-    ("Firestore 动态", "https://docs.cloud.google.com/feeds/fs-release-notes.xml", "Google Cloud", "Firestore / Firestore with MongoDB compatibility", "文档数据库", "Google Cloud,Firestore,MongoDB compatibility,文档数据库", "Google Cloud Firestore release notes RSS，覆盖 MongoDB compatibility"),
-    ("Datastore 动态", "https://docs.cloud.google.com/feeds/datastore-release-notes.xml", "Google Cloud", "Firestore in Datastore mode / Datastore", "文档数据库", "Google Cloud,Firestore in Datastore mode,Datastore,文档数据库", "Google Cloud Datastore release notes RSS，覆盖 Firestore in Datastore mode"),
-    ("Memorystore for Redis 动态", "https://docs.cloud.google.com/feeds/memorystore-release-notes.xml", "Google Cloud", "Memorystore for Redis", "缓存", "Google Cloud,Memorystore,Redis,缓存", "Google Cloud Memorystore for Redis release notes RSS"),
-]
-
-AZURE_DATABASE_FEEDS = [
-    ("Azure DocumentDB 动态", "https://rsshub.codgi.xin/microsoft/azure-updates/Azure DocumentDB", "Microsoft", "Azure DocumentDB", "文档数据库", "Microsoft,Azure,Azure DocumentDB,文档数据库", "Azure DocumentDB 官方更新 RSS"),
-    ("Azure Database for MySQL 动态", "https://rsshub.codgi.xin/microsoft/azure-updates/Azure Database for MySQL", "Microsoft", "Azure Database for MySQL", "关系型", "Microsoft,Azure,Azure Database for MySQL,关系型", "Azure Database for MySQL 官方更新 RSS"),
-    ("Azure Database for PostgreSQL 动态", "https://rsshub.codgi.xin/microsoft/azure-updates/Azure Database for PostgreSQL", "Microsoft", "Azure Database for PostgreSQL", "关系型", "Microsoft,Azure,Azure Database for PostgreSQL,PostgreSQL,关系型", "Azure Database for PostgreSQL 官方更新 RSS"),
-    ("Azure SQL 动态", "https://rsshub.codgi.xin/microsoft/azure-updates/Azure SQL", "Microsoft", "Azure SQL", "关系型", "Microsoft,Azure,Azure SQL,关系型", "Azure SQL 官方更新 RSS"),
-]
-
-VOLCENGINE_SOURCE_META = {
-    "Redis": ("Redis", "Redis"),
-    "Valkey": ("Valkey", "Valkey"),
-    "MySQL Community 8.4": ("MySQL", "MySQL Community 8.4"),
-    "MySQL Community 8.0": ("MySQL", "MySQL Community 8.0"),
-    "TiDB": ("PingCAP", "TiDB"),
-    "OceanBase Docs": ("OceanBase", "OceanBase"),
-    "OceanBase GitHub": ("OceanBase", "OceanBase"),
-    "PolarDB-X": ("PolarDB-X", "PolarDB-X"),
-    "PostgreSQL": ("PostgreSQL", "PostgreSQL"),
-    "MongoDB": ("MongoDB", "MongoDB"),
-    "Apache HBase": ("Apache", "Apache HBase"),
-    "Apache Phoenix": ("Apache", "Apache Phoenix"),
-    "SQL Server": ("Microsoft", "SQL Server"),
-    "Elasticsearch": ("Elastic", "Elasticsearch"),
-    "OpenSearch": ("OpenSearch", "OpenSearch"),
-    "Milvus": ("Milvus", "Milvus"),
-    "Qdrant": ("Qdrant", "Qdrant"),
-    "Weaviate": ("Weaviate", "Weaviate"),
-    "Chroma": ("Chroma", "Chroma"),
-    "FAISS": ("Meta", "FAISS"),
-    "HNSWlib": ("nmslib", "HNSWlib"),
-    "DiskANN": ("Microsoft", "DiskANN"),
-    "pgvector": ("pgvector", "pgvector"),
-    "Mem0": ("Mem0", "Mem0"),
-    "Zep": ("Zep", "Zep"),
-    "Letta / MemGPT": ("Letta", "Letta / MemGPT"),
-    "LangGraph memory": ("LangChain", "LangGraph memory"),
-    "TencentDB Agent Memory": ("腾讯云", "TencentDB Agent Memory"),
-    "OpenViking": ("OpenViking", "OpenViking"),
-    "Supabase GitHub": ("Supabase", "Supabase"),
-    "Supabase Changelog": ("Supabase", "Supabase"),
-}
-
-
-def unique_nonempty(values: list[str]) -> list[str]:
-    result = []
-    for value in values:
-        value = (value or "").strip()
-        if value and value not in result:
-            result.append(value)
-    return result
-
-
-def strip_dynamic_suffix(value: str) -> str:
-    value = (value or "").strip()
-    if value.endswith(" 动态"):
-        return value[:-3].strip()
-    if value.endswith("动态"):
-        return value[:-2].strip()
-    return value
-
-
-def actual_volcengine_source_name(feed: dict[str, Any]) -> str:
-    name = strip_dynamic_suffix(feed.get("name") or "")
-    product = (feed.get("product") or "").strip()
-    prefix = f"火山引擎 {product} / "
-    if product and name.startswith(prefix):
-        return name[len(prefix):].strip()
-    if name.startswith("火山引擎 "):
-        parts = [part.strip() for part in name.removeprefix("火山引擎 ").split(" / ") if part.strip()]
-        if parts:
-            return parts[-1]
-    return name
-
-
-def table_columns(conn, table: str) -> set[str]:
-    return {row["name"] for row in rows(conn.execute(f"PRAGMA table_info({table})"))}
-
-
-def migrate(conn):
-    feed_count = one(conn.execute("SELECT COUNT(*) AS c FROM feeds"))["c"]
-    if "website_url" in table_columns(conn, "feeds"):
-        conn.execute("ALTER TABLE feeds DROP COLUMN website_url")
-    feed_columns = table_columns(conn, "feeds")
-    if "etag" not in feed_columns:
-        conn.execute("ALTER TABLE feeds ADD COLUMN etag TEXT DEFAULT ''")
-    if "last_modified" not in feed_columns:
-        conn.execute("ALTER TABLE feeds ADD COLUMN last_modified TEXT DEFAULT ''")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_entries_published_at ON entries(published_at)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_entries_feed_id ON entries(feed_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_entries_feed_published_at ON entries(feed_id, published_at)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_group_feeds_group_feed ON group_feeds(group_id, feed_id)")
-    conn.execute(
-        """UPDATE feeds
-           SET name = ?, product = ?, db_type = ?, tags = ?, description = ?
-           WHERE rss_url = ?""",
-        ("腾讯云向量数据库动态", "向量数据库", "向量数据库", "腾讯云,向量数据库", "腾讯云向量数据库产品更新 RSS", TENCENT_VECTOR_RSS_URL),
-    )
-    vector_feed = one(conn.execute("SELECT id FROM feeds WHERE rss_url = ?", (TENCENT_VECTOR_RSS_URL,)))
-    vector_group = one(conn.execute("SELECT id FROM groups WHERE name = ?", ("向量数据库动态",)))
-    if vector_feed:
-        conn.execute("DELETE FROM entries WHERE feed_id = ? AND guid LIKE 'seed-%'", (vector_feed["id"],))
-        conn.execute(
-            "DELETE FROM group_feeds WHERE feed_id = ? AND group_id IN (SELECT id FROM groups WHERE name = ?)",
-            (vector_feed["id"], "云厂商关系型数据库"),
-        )
-    if vector_feed and vector_group:
-        conn.execute(
-            """INSERT OR IGNORE INTO group_feeds(group_id, feed_id, sort_order)
-               VALUES (?, ?, COALESCE((SELECT MAX(sort_order) + 1 FROM group_feeds WHERE group_id = ?), 0))""",
-            (vector_group["id"], vector_feed["id"], vector_group["id"]),
-        )
-    if feed_count:
-        ensure_aws_database_feeds(conn)
-        ensure_google_cloud_database_feeds(conn)
-        ensure_azure_database_feeds(conn)
-    normalize_volcengine_feed_metadata(conn)
-
-
-def ensure_aws_database_feeds(conn):
-    updated_at = now_iso()
-    for name, rss_url, vendor, product, db_type, tags, description in AWS_DATABASE_FEEDS:
-        existing = one(conn.execute("SELECT id FROM feeds WHERE rss_url = ?", (rss_url,)))
-        if existing:
-            conn.execute(
-                """UPDATE feeds
-                   SET name = ?, vendor = ?, product = ?, db_type = ?, tags = ?, description = ?, updated_at = ?
-                   WHERE id = ?""",
-                (name, vendor, product, db_type, tags, description, updated_at, existing["id"]),
-            )
-        else:
-            conn.execute(
-                """INSERT INTO feeds(name, rss_url, vendor, product, db_type, tags, description, enabled, status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'normal')""",
-                (name, rss_url, vendor, product, db_type, tags, description),
-            )
-
-
-def ensure_google_cloud_database_feeds(conn):
-    updated_at = now_iso()
-    for name, rss_url, vendor, product, db_type, tags, description in GOOGLE_CLOUD_DATABASE_FEEDS:
-        existing = one(conn.execute("SELECT id FROM feeds WHERE rss_url = ?", (rss_url,)))
-        if existing:
-            conn.execute(
-                """UPDATE feeds
-                   SET name = ?, vendor = ?, product = ?, db_type = ?, tags = ?, description = ?, updated_at = ?
-                   WHERE id = ?""",
-                (name, vendor, product, db_type, tags, description, updated_at, existing["id"]),
-            )
-        else:
-            conn.execute(
-                """INSERT INTO feeds(name, rss_url, vendor, product, db_type, tags, description, enabled, status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'normal')""",
-                (name, rss_url, vendor, product, db_type, tags, description),
-            )
-
-
-def ensure_azure_database_feeds(conn):
-    updated_at = now_iso()
-    for name, rss_url, vendor, product, db_type, tags, description in AZURE_DATABASE_FEEDS:
-        existing = one(conn.execute("SELECT id FROM feeds WHERE rss_url = ?", (rss_url,)))
-        if existing:
-            conn.execute(
-                """UPDATE feeds
-                   SET name = ?, vendor = ?, product = ?, db_type = ?, tags = ?, description = ?, updated_at = ?
-                   WHERE id = ?""",
-                (name, vendor, product, db_type, tags, description, updated_at, existing["id"]),
-            )
-        else:
-            conn.execute(
-                """INSERT INTO feeds(name, rss_url, vendor, product, db_type, tags, description, enabled, status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'normal')""",
-                (name, rss_url, vendor, product, db_type, tags, description),
-            )
-
-
-def normalize_volcengine_feed_metadata(conn):
-    candidates = rows(
-        conn.execute(
-            """SELECT id, name, vendor, product, db_type, tags, description
-               FROM feeds
-               WHERE vendor = ? OR name LIKE ? OR tags LIKE ?""",
-            ("火山引擎", "火山引擎 %", "%火山引擎%"),
-        )
-    )
-    updated_at = now_iso()
-    for feed in candidates:
-        source = actual_volcengine_source_name(feed)
-        if not source:
-            continue
-        vendor, product = VOLCENGINE_SOURCE_META.get(source, (source, source))
-        db_type = feed.get("db_type") or ""
-        tags = ",".join(unique_nonempty([vendor, product, source, db_type]))
-        values = {
-            "name": f"{source} 动态",
-            "vendor": vendor,
-            "product": product,
-            "tags": tags,
-            "description": f"{source} 更新订阅",
-        }
-        if all((feed.get(key) or "") == value for key, value in values.items()):
-            continue
-        conn.execute(
-            """UPDATE feeds
-               SET name = ?, vendor = ?, product = ?, tags = ?, description = ?, updated_at = ?
-               WHERE id = ?""",
-            (values["name"], values["vendor"], values["product"], values["tags"], values["description"], updated_at, feed["id"]),
-        )
 
 
 @app.on_event("startup")
@@ -329,7 +88,7 @@ def feed_row(row):
     return row
 
 
-def query_entries(filters: dict[str, Any], limit=50, offset=0):
+def entries_where(filters: dict[str, Any]) -> tuple[str, list]:
     where, params = [], []
     if filters.get("feed_id"):
         where.append("e.feed_id = ?"); params.append(filters["feed_id"])
@@ -344,8 +103,12 @@ def query_entries(filters: dict[str, Any], limit=50, offset=0):
         where.append("e.published_at >= ?"); params.append(filters["start"])
     if filters.get("end"):
         where.append("e.published_at < ?"); params.append(next_day(filters["end"]))
-    sql_where = " WHERE " + " AND ".join(where) if where else ""
-    sql = f"""SELECT e.*, f.name AS feed_name, f.vendor, f.product, f.db_type
+    return (" WHERE " + " AND ".join(where) if where else ""), params
+
+
+def query_entries(filters: dict[str, Any], limit=50, offset=0):
+    sql_where, params = entries_where(filters)
+    sql = f"""SELECT e.*, f.name AS feed_name, f.vendor, f.product, f.db_type, f.tags AS feed_tags
               FROM entries e JOIN feeds f ON f.id=e.feed_id {sql_where}
               ORDER BY e.published_at DESC, e.id DESC LIMIT ? OFFSET ?"""
     count_sql = f"SELECT COUNT(*) AS c FROM entries e JOIN feeds f ON f.id=e.feed_id {sql_where}"
@@ -356,6 +119,14 @@ def query_entries(filters: dict[str, Any], limit=50, offset=0):
 
 
 def calendar(filters, month: str = ""):
+    # month 传 4 位年份（如 "2025"）时按月聚合整年，用于日历「按月」粒度。
+    if re.fullmatch(r"\d{4}", month or ""):
+        filters = {**filters, "start": f"{month}-01-01", "end": f"{month}-12-31"}
+        sql_where, params = entries_where(filters)
+        sql = f"SELECT substr(e.published_at,1,7) m, COUNT(*) count FROM entries e JOIN feeds f ON f.id=e.feed_id {sql_where} GROUP BY m"
+        with db() as conn:
+            grouped = rows(conn.execute(sql, params))
+        return [{"date": row["m"], "count": row["count"], "items": []} for row in grouped if row["m"]]
     month_bounds = month_range(month)
     filters = {**filters}
     if month_bounds:
@@ -375,66 +146,33 @@ def calendar(filters, month: str = ""):
     return list(days.values())
 
 
-def forwarded_value(value: str | None) -> str:
-    return (value or "").split(",", 1)[0].strip()
-
-
-def public_base_url(request: Request) -> str:
-    configured_url = os.getenv("PRODUCTHUNTER_PUBLIC_BASE_URL") or os.getenv("RSSHUNTER_PUBLIC_BASE_URL")
-    if configured_url:
-        return configured_url.rstrip("/")
-    host = forwarded_value(request.headers.get("x-forwarded-host")) or forwarded_value(request.headers.get("host"))
-    if host:
-        proto = forwarded_value(request.headers.get("x-forwarded-proto")) or request.url.scheme
-        port = forwarded_value(request.headers.get("x-forwarded-port"))
-        if port and ":" not in host and not ((proto == "http" and port == "80") or (proto == "https" and port == "443")):
-            host = f"{host}:{port}"
-        return f"{proto}://{host}".rstrip("/")
-    return str(request.base_url).rstrip("/")
-
-
-def read_skill_file(path: Path) -> str:
-    if not path.exists():
-        raise HTTPException(404, "Skill 安装文件不存在")
-    return path.read_text(encoding="utf-8")
-
-
-@app.get("/api/skill/SKILL.md", response_class=PlainTextResponse)
-def skill_install_guide(request: Request):
-    text = read_skill_file(SKILL_PUBLIC_DIR / "SKILL.md")
-    return PlainTextResponse(text.replace("{{BASE_URL}}", public_base_url(request)))
-
-
-@app.get("/api/skill/install.sh", response_class=PlainTextResponse)
-def skill_install_script(request: Request):
-    text = read_skill_file(SKILL_PUBLIC_DIR / "install.sh")
-    return PlainTextResponse(text.replace("{{BASE_URL}}", public_base_url(request)), media_type="text/x-shellscript")
-
-
-@app.get("/api/skill/package/{file_path:path}", response_class=PlainTextResponse)
-def skill_package_file(file_path: str, request: Request):
-    if file_path not in SKILL_PACKAGE_FILES:
-        raise HTTPException(404, "Skill 文件不存在")
-    text = read_skill_file(SKILL_PACKAGE_DIR / file_path)
-    return PlainTextResponse(text.replace("{{BASE_URL}}", public_base_url(request)))
 
 
 @app.get("/api/overview")
 def overview():
     today = datetime.now(timezone.utc).date().isoformat()
+    yesterday = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
     start = (datetime.now(timezone.utc).date() - timedelta(days=6)).isoformat()
+    abnormal_where = "status IN ('fetch_failed','parse_error') OR enabled=0"
     with db() as conn:
         stats = {
             "today_entries": one(conn.execute("SELECT COUNT(*) c FROM entries WHERE date(published_at)=date(?)", (today,)))["c"],
             "feed_count": one(conn.execute("SELECT COUNT(*) c FROM feeds"))["c"],
             "group_count": one(conn.execute("SELECT COUNT(*) c FROM groups"))["c"],
-            "abnormal_count": one(conn.execute("SELECT COUNT(*) c FROM feeds WHERE status IN ('fetch_failed','parse_error') OR enabled=0"))["c"],
+            "abnormal_count": one(conn.execute(f"SELECT COUNT(*) c FROM feeds WHERE {abnormal_where}"))["c"],
+        }
+        # 与昨日相比的变化量：动态用环比百分比，其余为「今日新增」绝对值。
+        yesterday_entries = one(conn.execute("SELECT COUNT(*) c FROM entries WHERE date(published_at)=date(?)", (yesterday,)))["c"]
+        deltas = {
+            "today_entries_pct": round((stats["today_entries"] - yesterday_entries) / yesterday_entries * 100, 1) if yesterday_entries else None,
+            "feed_added": one(conn.execute("SELECT COUNT(*) c FROM feeds WHERE date(created_at)=date(?)", (today,)))["c"],
+            "group_added": one(conn.execute("SELECT COUNT(*) c FROM groups WHERE date(created_at)=date(?)", (today,)))["c"],
         }
         trend = rows(conn.execute("SELECT date(published_at) date, COUNT(*) count FROM entries WHERE date(published_at)>=date(?) GROUP BY date(published_at)", (start,)))
         recent_feeds = rows(conn.execute("SELECT *, (SELECT COUNT(*) FROM entries WHERE feed_id=feeds.id AND date(published_at)=date(?)) today_new FROM feeds ORDER BY datetime(latest_item_published_at) DESC LIMIT 5", (today,)))
         groups = rows(conn.execute("SELECT g.*, COUNT(gf.feed_id) feed_count, COALESCE(MAX(e.published_at),'') latest_update FROM groups g LEFT JOIN group_feeds gf ON gf.group_id=g.id LEFT JOIN entries e ON e.feed_id=gf.feed_id GROUP BY g.id ORDER BY g.id LIMIT 5"))
-        abnormal = rows(conn.execute("SELECT * FROM feeds WHERE status IN ('fetch_failed','parse_error') OR enabled=0 ORDER BY updated_at DESC LIMIT 8"))
-    return {"stats": stats, "trend": trend, "recent_feeds": recent_feeds, "groups": groups, "abnormal_feeds": abnormal}
+        abnormal = rows(conn.execute(f"SELECT * FROM feeds WHERE {abnormal_where} ORDER BY updated_at DESC LIMIT 8"))
+    return {"stats": stats, "deltas": deltas, "trend": trend, "recent_feeds": recent_feeds, "groups": groups, "abnormal_feeds": abnormal}
 
 
 @app.get("/api/feeds")
@@ -442,9 +180,15 @@ def list_feeds(keyword: str = "", vendor: str = "", product: str = "", db_type: 
     where, params = [], []
     if keyword:
         where.append("(f.name LIKE ? OR f.rss_url LIKE ? OR f.vendor LIKE ? OR f.product LIKE ?)"); params += [f"%{keyword}%"] * 4
-    for val, col in [(vendor, "f.vendor"), (product, "f.product"), (db_type, "f.db_type"), (status, "f.status")]:
+    for val, col in [(vendor, "f.vendor"), (product, "f.product"), (db_type, "f.db_type")]:
         if val:
             where.append(f"{col} = ?"); params.append(val)
+    if status == "abnormal":
+        where.append("(f.status IN ('fetch_failed','parse_error') OR f.enabled=0)")
+    elif status == "disabled":
+        where.append("f.enabled=0")
+    elif status:
+        where.append("f.status = ?"); params.append(status)
     sql_where = " WHERE " + " AND ".join(where) if where else ""
     with db() as conn:
         data = rows(conn.execute(f"SELECT f.*, GROUP_CONCAT(g.name) groups FROM feeds f LEFT JOIN group_feeds gf ON gf.feed_id=f.id LEFT JOIN groups g ON g.id=gf.group_id {sql_where} GROUP BY f.id ORDER BY f.id", params))
@@ -512,6 +256,15 @@ async def refresh_feed(feed_id: int):
     return await fetch_feed(feed_id)
 
 
+@app.post("/api/feeds/{feed_id}/enable")
+def enable_feed(feed_id: int):
+    with db() as conn:
+        if not one(conn.execute("SELECT id FROM feeds WHERE id=?", (feed_id,))):
+            raise HTTPException(404, "订阅源不存在")
+        conn.execute("UPDATE feeds SET enabled=1,status='normal',updated_at=? WHERE id=?", (now_iso(), feed_id))
+    return get_feed(feed_id)
+
+
 @app.get("/api/feeds/{feed_id}/entries")
 def feed_entries(feed_id: int, keyword: str = "", limit: int = 50, offset: int = 0):
     return query_entries({"feed_id": feed_id, "keyword": keyword}, limit, offset)
@@ -520,6 +273,13 @@ def feed_entries(feed_id: int, keyword: str = "", limit: int = 50, offset: int =
 @app.get("/api/feeds/{feed_id}/calendar")
 def feed_calendar(feed_id: int, month: str = ""):
     return calendar({"feed_id": feed_id}, month)
+
+
+@app.get("/api/sync-status")
+def sync_status():
+    with db() as conn:
+        last = one(conn.execute("SELECT started_at, result FROM fetch_logs ORDER BY id DESC LIMIT 1"))
+    return {"ok": not last or last["result"] != "failed", "last_at": last["started_at"] if last else None}
 
 
 @app.get("/api/groups")
@@ -553,10 +313,16 @@ def create_group(payload: GroupIn):
 def get_group(group_id: int):
     with db() as conn:
         group = one(conn.execute("SELECT * FROM groups WHERE id=?", (group_id,)))
+        if not group:
+            raise HTTPException(404, "订阅组不存在")
         feeds = rows(conn.execute("SELECT f.* FROM feeds f JOIN group_feeds gf ON gf.feed_id=f.id WHERE gf.group_id=? ORDER BY gf.sort_order", (group_id,)))
-    if not group:
-        raise HTTPException(404, "订阅组不存在")
+        bad = one(conn.execute(
+            "SELECT COUNT(*) c FROM feeds f JOIN group_feeds gf ON gf.feed_id=f.id "
+            "WHERE gf.group_id=? AND f.status IN ('fetch_failed','parse_error')",
+            (group_id,)
+        ))
     group["enabled"] = bool(group["enabled"]); group["tags"] = [t for t in (group.get("tags") or "").split(",") if t]; group["feeds"] = feeds
+    group["bad_feed_count"] = bad["c"]
     return group
 
 

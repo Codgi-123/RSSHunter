@@ -1,16 +1,15 @@
-import { AlertTriangle, ChevronDown, ChevronUp, ChevronsUpDown, Download, Edit3, Eye, PauseCircle, Plus, RefreshCw, Rss, Search, ShieldCheck, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, ChevronsUpDown, Copy, Download, Edit3, Eye, PauseCircle, Plus, RefreshCw, Rss, Search, ShieldCheck, Trash2, Upload } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import ActionDialog from '../components/ActionDialog';
-import CopyButton from '../components/CopyButton';
+import { writeClipboard } from '../components/CopyButton';
 import { ClearableInput, ClearableSelect } from '../components/FilterControls';
-import { PageTitle } from '../components/Layout';
-import MetricCard from '../components/MetricCard';
 import Modal from '../components/Modal';
 import Pagination, { getPageItems } from '../components/Pagination';
 import StatusPill from '../components/StatusPill';
 import TagInput from '../components/TagInput';
+import { useToast } from '../components/Toast';
 import TagList from '../components/TagList';
 import VendorBadge from '../components/VendorBadge';
 import { useFeeds, useInvalidateAll } from '../queries';
@@ -83,8 +82,8 @@ export default function FeedsPage() {
   const [form, setForm] = useState(newFeedForm());
   const [busy, setBusy] = useState(false);
   const [busyFeedId, setBusyFeedId] = useState(null);
-  const [message, setMessage] = useState('');
   const [formErrors, setFormErrors] = useState({});
+  const toast = useToast();
   const [bulkOpen, setBulkOpen] = useState(false);
 
   // URL search params hold all list state, so leaving and returning (or sharing
@@ -128,14 +127,12 @@ export default function FeedsPage() {
     setEditing(null);
     setForm(newFeedForm());
     setFormErrors({});
-    setMessage('');
   }
 
   function openEdit(feed) {
     setEditing(feed);
     setForm({ ...feed, tags: splitTags(feed.tags) });
     setFormErrors({});
-    setMessage('');
   }
 
   function closeModal() {
@@ -149,16 +146,15 @@ export default function FeedsPage() {
     setFormErrors(errors);
     if (Object.keys(errors).length) return;
     setBusy(true);
-    setMessage('');
     const payload = { ...form, name: form.name.trim(), rss_url: form.rss_url.trim(), vendor: form.vendor.trim(), product: form.product.trim(), tags: splitTags(form.tags), enabled: Boolean(form.enabled) };
     try {
       if (editing) await api.put(`/feeds/${editing.id}`, payload);
       else await api.post('/feeds', payload);
       closeModal();
       await invalidate();
-      setMessage(editing ? '订阅已更新' : '订阅已创建');
+      toast.success(editing ? '订阅已更新' : '订阅已创建');
     } catch (err) {
-      setMessage(err.message);
+      toast.error(err.message);
     } finally { setBusy(false); }
   }
 
@@ -168,11 +164,20 @@ export default function FeedsPage() {
     try {
       await api.delete(`/feeds/${feed.id}`);
       await invalidate();
-      setMessage('订阅已删除');
+      toast.success('订阅已删除');
     } catch (err) {
-      setMessage(err.message);
+      toast.error(err.message);
     } finally {
       setBusyFeedId(null);
+    }
+  }
+
+  async function copyRssUrl(feed) {
+    try {
+      await writeClipboard(feed.rss_url);
+      toast.success('RSS URL 已复制');
+    } catch {
+      toast.error('复制失败，请手动复制');
     }
   }
 
@@ -181,34 +186,62 @@ export default function FeedsPage() {
     try {
       await api.post(`/feeds/${feed.id}/refresh`, {});
       await invalidate();
-      setMessage('订阅刷新完成');
+      toast.success('订阅刷新完成');
     } catch (err) {
-      setMessage(err.message);
+      toast.error(err.message);
     } finally { setBusyFeedId(null); }
   }
 
   return (
     <>
-      <PageTitle title="订阅管理" subtitle="统一管理所有数据库 RSS 订阅源，支持搜索、筛选、状态维护与手动刷新" />
-      <section className="toolbar-panel">
-        <button className="primary-button" onClick={openCreate}><Plus size={18} />新增订阅</button>
-        <button onClick={() => setBulkOpen(true)}><Upload size={17} />批量导入</button>
-        <ClearableInput className="filter-search" value={filters.keyword} onChange={(value) => updateFilter('keyword', value)} placeholder="搜索订阅名称、厂商、产品或 URL" label="订阅搜索" icon={<Search size={18} />} />
-        <ClearableSelect value={filters.vendor} onChange={(value) => updateFilter('vendor', value)} label="厂商"><option value="">厂商</option>{vendors.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
-        <ClearableSelect value={filters.product} onChange={(value) => updateFilter('product', value)} label="产品"><option value="">产品</option>{products.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
-        <ClearableSelect value={filters.db_type} onChange={(value) => updateFilter('db_type', value)} label="数据库类型"><option value="">数据库类型</option>{dbTypes.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
-        <ClearableSelect value={filters.status} onChange={(value) => updateFilter('status', value)} label="状态"><option value="">状态</option><option value="normal">正常</option><option value="fetch_failed">抓取失败</option><option value="parse_error">解析异常</option></ClearableSelect>
-        <button onClick={() => setSearchParams({}, { replace: true })}><RefreshCw size={16} />重置筛选</button>
-      </section>
+      <div className="page-title">
+        <div>
+          <h1>订阅管理</h1>
+          <p>统一管理所有数据库 RSS 订阅源，支持搜索、筛选与手动刷新</p>
+        </div>
+        <div className="page-actions">
+          <button className="primary-button" onClick={openCreate}><Plus size={16} />新增订阅</button>
+          <button onClick={() => setBulkOpen(true)}><Upload size={15} />批量导入</button>
+        </div>
+      </div>
 
-      <section className="metric-grid"><MetricCard icon={Rss} label="订阅源总数" value={stats.total} hint="所有订阅源数量" /><MetricCard icon={ShieldCheck} label="正常订阅源" value={stats.ok} tone="green" hint="运行正常的订阅源" /><MetricCard icon={AlertTriangle} label="异常订阅源" value={stats.bad} tone="red" hint="存在异常的订阅源" /><MetricCard icon={PauseCircle} label="停用订阅源" value={stats.disabled} tone="gray" hint="已停用的订阅源" /></section>
+      <div className="stat-strip standalone">
+        <div className="stat-strip-item">
+          <div className="stat-label">订阅源总数</div>
+          <div className="stat-value">{stats.total}</div>
+        </div>
+        <div className="stat-strip-item">
+          <div className="stat-label">正常</div>
+          <div className="stat-value" style={{ color: 'var(--ok)' }}>{stats.ok}</div>
+        </div>
+        <div className="stat-strip-item">
+          <div className="stat-label">异常</div>
+          <div className={`stat-value ${stats.bad > 0 ? 'stat-value-warm' : ''}`}>{stats.bad}</div>
+        </div>
+        <div className="stat-strip-item">
+          <div className="stat-label">停用</div>
+          <div className="stat-value" style={{ color: 'var(--muted)' }}>{stats.disabled}</div>
+        </div>
+      </div>
 
-      <section className="panel">
-        <div className="panel-header"><h2>RSS 订阅列表</h2><div className="header-tools"><button onClick={() => exportFeeds(sortedItems)} disabled={!sortedItems.length}><Download size={16} />导出</button><button onClick={() => invalidate()} disabled={isFetching}><RefreshCw size={16} />{isFetching ? '刷新中' : '刷新列表'}</button></div></div>
-        {message && <div className="inline-status"><span>{message}</span><button onClick={() => setMessage('')}>关闭</button></div>}
+      <div className="page-block">
+        <div className="toolbar" style={{ justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', flex: 1 }}>
+            <ClearableInput className="filter-field" value={filters.keyword} onChange={(value) => updateFilter('keyword', value)} placeholder="搜索订阅名称、厂商、产品或 URL" label="订阅搜索" icon={<Search size={15} />} />
+            <ClearableSelect value={filters.vendor} onChange={(value) => updateFilter('vendor', value)} label="厂商"><option value="">厂商</option>{vendors.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
+            <ClearableSelect value={filters.product} onChange={(value) => updateFilter('product', value)} label="产品"><option value="">产品</option>{products.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
+            <ClearableSelect value={filters.db_type} onChange={(value) => updateFilter('db_type', value)} label="数据库类型"><option value="">类型</option>{dbTypes.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
+            <ClearableSelect value={filters.status} onChange={(value) => updateFilter('status', value)} label="状态"><option value="">状态</option><option value="abnormal">异常</option><option value="normal">正常</option><option value="fetch_failed">抓取失败</option><option value="parse_error">解析异常</option><option value="disabled">已停用</option></ClearableSelect>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => invalidate()} disabled={isFetching}><RefreshCw size={14} />{isFetching ? '刷新中' : '刷新'}</button>
+            <button onClick={() => exportFeeds(sortedItems)} disabled={!sortedItems.length}><Download size={15} />导出</button>
+            <button onClick={() => setSearchParams({}, { replace: true })}>重置筛选</button>
+          </div>
+        </div>
         <div className="table-wrap">
           <table className="data-table">
-            <thead><tr><th><button className="table-sort-button" onClick={() => updateSort('name')}>订阅名称 {sort.key === 'name' ? (sort.direction === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />) : <ChevronsUpDown size={13} style={{ opacity: 0.4 }} />}</button></th><th><button className="table-sort-button" onClick={() => updateSort('vendor')}>厂商 {sort.key === 'vendor' ? (sort.direction === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />) : <ChevronsUpDown size={13} style={{ opacity: 0.4 }} />}</button></th><th><button className="table-sort-button" onClick={() => updateSort('product')}>产品 {sort.key === 'product' ? (sort.direction === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />) : <ChevronsUpDown size={13} style={{ opacity: 0.4 }} />}</button></th><th>数据库类型</th><th>标签</th><th>RSS URL</th><th>最近更新时间</th><th>状态</th><th>操作</th></tr></thead>
+            <thead><tr><th><button className="table-sort-button" onClick={() => updateSort('name')}>订阅名称 {sort.key === 'name' ? (sort.direction === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />) : <ChevronsUpDown size={13} style={{ opacity: 0.4 }} />}</button></th><th><button className="table-sort-button" onClick={() => updateSort('vendor')}>厂商 {sort.key === 'vendor' ? (sort.direction === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />) : <ChevronsUpDown size={13} style={{ opacity: 0.4 }} />}</button></th><th><button className="table-sort-button" onClick={() => updateSort('product')}>产品 {sort.key === 'product' ? (sort.direction === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />) : <ChevronsUpDown size={13} style={{ opacity: 0.4 }} />}</button></th><th>数据库类型</th><th>标签</th><th>最近更新时间</th><th>状态</th><th>操作</th></tr></thead>
             <tbody>
               {!listLoading && pagedItems.map((feed) => (
                 <tr key={feed.id}>
@@ -217,7 +250,6 @@ export default function FeedsPage() {
                   <td>{feed.product}</td>
                   <td>{feed.db_type}</td>
                   <td><TagList tags={feed.tags} /></td>
-                  <td className="url-cell"><div className="url-cell-inner"><span>{feed.rss_url}</span><CopyButton text={feed.rss_url} /></div></td>
                   <td>{formatDateTime(feed.latest_item_published_at)}</td>
                   <td><StatusPill status={feed.status} enabled={feed.enabled} /></td>
                   <td className="row-actions action-cell">
@@ -225,6 +257,7 @@ export default function FeedsPage() {
                       title={feed.name}
                       actions={[
                         { label: '查看详情', icon: <Eye size={16} />, onClick: () => navigate(`/feeds/${feed.id}`) },
+                        { label: '复制 RSS URL', icon: <Copy size={16} />, onClick: () => copyRssUrl(feed) },
                         { label: '编辑订阅', icon: <Edit3 size={16} />, onClick: () => openEdit(feed) },
                         { label: feed.status === 'normal' ? '刷新订阅' : '重试抓取', icon: <RefreshCw size={16} />, primary: true, disabled: busyFeedId === feed.id, onClick: () => refreshFeed(feed) },
                         { label: '删除订阅', icon: <Trash2 size={16} />, danger: true, disabled: busyFeedId === feed.id, onClick: () => deleteFeed(feed) },
@@ -233,13 +266,13 @@ export default function FeedsPage() {
                   </td>
                 </tr>
               ))}
-              {listLoading && <tr><td colSpan="9" className="empty-cell"><span className="loading-label">正在加载订阅源...</span></td></tr>}
-              {!listLoading && !items.length && <tr><td colSpan="9" className="empty-cell">暂无订阅源</td></tr>}
+              {listLoading && <tr><td colSpan="8" className="empty-cell"><span className="loading-label">正在加载订阅源...</span></td></tr>}
+              {!listLoading && !items.length && <tr><td colSpan="8" className="empty-cell">暂无订阅源</td></tr>}
             </tbody>
           </table>
         </div>
         <Pagination total={sortedItems.length} page={page} pageSize={pageSize} onPageChange={(next) => patchParams({ page: next === 1 ? '' : next })} onPageSizeChange={(size) => patchParams({ pageSize: size, page: '' })} />
-      </section>
+      </div>
 
       {editing !== undefined && <FeedModal title={editing ? '编辑订阅' : '新增订阅'} form={form} setForm={setForm} busy={busy} errors={formErrors} onClose={closeModal} onSubmit={submitFeed} />}
       {bulkOpen && <BulkImportModal busy={busy} setBusy={setBusy} onClose={() => setBulkOpen(false)} onDone={invalidate} />}

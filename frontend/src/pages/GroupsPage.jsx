@@ -1,21 +1,28 @@
-import { Database, Edit3, Eye, Folder, Layers, Plus, Search, Server, Share2, Trash2 } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import ActionDialog from '../components/ActionDialog';
 import CopyButton from '../components/CopyButton';
 import { ClearableInput, ClearableSelect } from '../components/FilterControls';
-import { PageTitle } from '../components/Layout';
 import LoadingState from '../components/LoadingState';
 import Modal from '../components/Modal';
-import Pagination, { getPageItems } from '../components/Pagination';
-import StatusPill from '../components/StatusPill';
 import TagInput from '../components/TagInput';
-import TagList from '../components/TagList';
+import { useToast } from '../components/Toast';
 import { useFeeds, useGroups, useInvalidateAll } from '../queries';
-import { formatDateTime, splitTags, unique } from '../utils/format';
+import { splitTags, unique } from '../utils/format';
 
-const groupIcons = [Database, Layers, Server, Share2, Folder];
+const GROUP_COLORS = [
+  'oklch(0.55 0.12 255)',
+  'oklch(0.6 0.14 35)',
+  'oklch(0.55 0.12 165)',
+  'oklch(0.6 0.1 310)',
+  'oklch(0.6 0.12 80)',
+  'oklch(0.55 0.14 220)',
+  'oklch(0.55 0.12 130)',
+  'oklch(0.6 0.12 350)',
+  'oklch(0.5 0.13 35)',
+];
+
 const emptyGroup = { name: '', description: '', tags: [], default_view: 'aggregate', enabled: true, feed_ids: [] };
 
 function newGroupForm() {
@@ -32,56 +39,24 @@ function validateGroupForm(form) {
 export default function GroupsPage() {
   const navigate = useNavigate();
   const invalidate = useInvalidateAll();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const keyword = searchParams.get('keyword') || '';
-  const status = searchParams.get('status') || '';
-  const page = Number(searchParams.get('page')) || 1;
-  const pageSize = Number(searchParams.get('pageSize')) || 10;
   const { data: groups = [], isLoading } = useGroups();
   const { data: feeds = [] } = useFeeds();
-  const [editing, setEditing] = useState(undefined);
+  const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(newGroupForm());
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('');
   const [formErrors, setFormErrors] = useState({});
+  const toast = useToast();
 
-  function patchParams(patch) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      Object.entries(patch).forEach(([key, value]) => {
-        if (value === '' || value == null) next.delete(key);
-        else next.set(key, String(value));
-      });
-      return next;
-    }, { replace: true });
-  }
-
-  const visibleGroups = useMemo(() => groups.filter((group) => (!keyword || `${group.id}${group.name}${group.description}`.includes(keyword)) && (!status || Boolean(group.enabled) === (status === 'enabled'))), [groups, keyword, status]);
-  const pagedGroups = useMemo(() => getPageItems(visibleGroups, page, pageSize), [visibleGroups, page, pageSize]);
+  const summary = useMemo(() => ({
+    total: groups.length,
+    covered: groups.reduce((sum, g) => sum + (g.feed_count || 0), 0),
+    today: groups.reduce((sum, g) => sum + (g.today_new || 0), 0),
+  }), [groups]);
 
   function openCreate() {
-    setEditing(null);
     setForm(newGroupForm());
     setFormErrors({});
-    setMessage('');
-  }
-
-  function openEdit(group) {
-    setEditing(group);
-    setForm({ ...group, tags: splitTags(group.tags), feed_ids: (group.feeds || []).map((feed) => feed.id) });
-    setFormErrors({});
-    setMessage('');
-  }
-
-  async function hydrateAndEdit(group) {
-    setBusy(true);
-    try {
-      openEdit(await api.get(`/groups/${group.id}`));
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setBusy(false);
-    }
+    setCreating(true);
   }
 
   async function submitGroup() {
@@ -91,83 +66,71 @@ export default function GroupsPage() {
     const payload = { ...form, tags: splitTags(form.tags), enabled: Boolean(form.enabled), feed_ids: form.feed_ids.map(Number) };
     setBusy(true);
     try {
-      if (editing) await api.put(`/groups/${editing.id}`, payload);
-      else await api.post('/groups', payload);
-      setEditing(undefined);
+      await api.post('/groups', payload);
+      setCreating(false);
       await invalidate();
-      setMessage(editing ? '订阅组已更新' : '订阅组已创建');
+      toast.success('订阅组已创建');
     } catch (err) {
-      setMessage(err.message);
+      toast.error(err.message);
     } finally {
       setBusy(false);
     }
   }
 
-  async function deleteGroup(group) {
-    if (!confirm(`确认删除订阅组「${group.name}」？`)) return;
-    setBusy(true);
-    try {
-      await api.delete(`/groups/${group.id}`);
-      await invalidate();
-      setMessage('订阅组已删除');
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function openGroup(group) {
-    navigate(`/groups/${group.id}`);
-  }
-
-  function updateKeyword(value) {
-    patchParams({ keyword: value, page: '' });
-  }
-
-  function updateStatus(value) {
-    patchParams({ status: value, page: '' });
-  }
-
-  if (isLoading) return <><PageTitle title="订阅组管理" subtitle="正在加载订阅组..." /><LoadingState title="正在加载订阅组..." rows={3} /></>;
+  if (isLoading) return <LoadingState title="正在加载订阅组..." rows={3} />;
 
   return (
     <>
-      <PageTitle title="订阅组管理" subtitle="将多个 RSS 源组合成主题集合，支持聚合、按源分组和日历视图" />
-      <section className="toolbar-panel compact-toolbar"><button className="primary-button" onClick={openCreate} disabled={busy}><Plus size={18} />新增订阅组</button><ClearableInput className="filter-search" value={keyword} onChange={updateKeyword} placeholder="搜索订阅组名称、描述或 ID" label="订阅组搜索" icon={<Search size={18} />} /><ClearableSelect value={status} onChange={updateStatus} label="状态"><option value="">状态</option><option value="enabled">启用</option><option value="disabled">停用</option></ClearableSelect></section>
-      {message && <div className="inline-status"><span>{message}</span><button onClick={() => setMessage('')}>关闭</button></div>}
-      {visibleGroups.length > 0 && <p className="muted-text" style={{ margin: '0 0 12px', fontSize: 12 }}>点击卡片进入详情，支持聚合列表、按源分组与日历三种视图；可通过厂商 / 产品 / 关键词筛选后直接打开原文。</p>}
-      <section className="group-card-grid">
-        {pagedGroups.map((group, index) => {
-          const GroupIcon = groupIcons[index % groupIcons.length];
-          return (
-          <article className="group-card" key={group.id}>
-            <div className={`symbol-card color-${index % 5}`}><GroupIcon size={24} /></div>
-            <button className="card-title-link" onClick={() => openGroup(group)}>{group.name}</button>
-            <span className="entity-id">ID {group.id}</span>
-            <p>{group.description || '暂无描述'}</p>
-            <TagList tags={group.tags} />
-            <div className="group-meta"><span>包含订阅数</span><b>{group.feed_count || 0}</b></div>
-            <div className="group-meta"><span>今日新增</span><b>{group.today_new || 0}</b></div>
-            <div className="group-meta"><span>最近更新时间</span><b>{formatDateTime(group.latest_update)}</b></div>
-            <StatusPill status="normal" enabled={group.enabled} />
-            <div className="card-actions">
-              <ActionDialog
-                title={group.name}
-                actions={[
-                  { label: '查看详情', icon: <Eye size={16} />, onClick: () => openGroup(group) },
-                  { label: '编辑订阅组', icon: <Edit3 size={16} />, disabled: busy, onClick: () => hydrateAndEdit(group) },
-                  { label: '删除订阅组', icon: <Trash2 size={16} />, danger: true, disabled: busy, onClick: () => deleteGroup(group) },
-                ]}
-              />
-            </div>
-          </article>
-          );
-        })}
-      </section>
-      {!visibleGroups.length && <section className="panel state-panel">暂无匹配的订阅组</section>}
-      <Pagination total={visibleGroups.length} page={page} pageSize={pageSize} onPageChange={(next) => patchParams({ page: next === 1 ? '' : next })} onPageSizeChange={(size) => patchParams({ pageSize: size, page: '' })} />
-      {editing !== undefined && <GroupModal form={form} setForm={setForm} feeds={feeds} title={editing ? '编辑订阅组' : '新增订阅组'} busy={busy} errors={formErrors} onClose={() => setEditing(undefined)} onSubmit={submitGroup} />}
+      <div className="overview-head">
+        <div>
+          <div className="overview-eyebrow">GROUPS / 订阅组管理</div>
+          <div className="overview-title">订阅组管理</div>
+        </div>
+        <button className="primary-button" onClick={openCreate} disabled={busy}><Plus size={16} />新建订阅组</button>
+      </div>
+
+
+      <div className="stat-strip editorial summary-3">
+        <div className="stat-strip-item">
+          <div className="stat-label">订阅组总数</div>
+          <div className="stat-value summary-value">{summary.total}</div>
+        </div>
+        <div className="stat-strip-item">
+          <div className="stat-label">覆盖订阅源</div>
+          <div className="stat-value summary-value">{summary.covered}</div>
+        </div>
+        <div className="stat-strip-item">
+          <div className="stat-label">今日总动态</div>
+          <div className="stat-value summary-value stat-value-accent">{summary.today}</div>
+        </div>
+      </div>
+
+      {groups.length ? (
+        <div className="group-card-grid">
+          {groups.map((group, index) => (
+            <a
+              className="group-card"
+              key={group.id}
+              style={{ borderTopColor: GROUP_COLORS[index % GROUP_COLORS.length] }}
+              onClick={() => navigate(`/groups/${group.id}`)}
+            >
+              <div className="group-card-name">{group.name}</div>
+              <div className="group-card-desc">{group.description || '暂无描述'}</div>
+              <div className="group-card-foot">
+                <div className="group-card-stats">
+                  <span><b>{group.feed_count || 0}</b> 订阅源</span>
+                  <span><b className="accent-mono">+{group.today_new || 0}</b> 今日</span>
+                </div>
+                <span className="group-card-link">查看详情 →</span>
+              </div>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <div className="state-panel">暂无订阅组</div>
+      )}
+
+      {creating && <GroupModal form={form} setForm={setForm} feeds={feeds} title="新建订阅组" busy={busy} errors={formErrors} onClose={() => setCreating(false)} onSubmit={submitGroup} />}
     </>
   );
 }

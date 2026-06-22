@@ -27,7 +27,7 @@ export default function ActionDialog({ title = '更多操作', actions = [] }) {
         <button className="action-more-button" type="button" title="更多操作" aria-label="更多操作"><MoreHorizontal size={18} /></button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content className="action-popover" align="end" sideOffset={8} aria-label={title}>
+        <DropdownMenu.Content className="action-popover" align="end" sideOffset={8} collisionPadding={10} aria-label={title}>
           <div className="action-popover-title">{title}</div>
           <div className="action-dialog-list">
             {actions.map((action) => (

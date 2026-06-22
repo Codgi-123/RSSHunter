@@ -1,36 +1,35 @@
-import { ArrowLeft, CalendarDays, Database, Edit3, Grid2X2, List, Search, Users } from 'lucide-react';
+import { CalendarDays, Database, List, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import CalendarGrid from '../components/CalendarGrid';
-import CopyButton from '../components/CopyButton';
-import DateRangeFilter from '../components/DateRangeFilter';
+import DayEntriesPanel from '../components/DayEntriesPanel';
 import EntryDetailModal from '../components/EntryDetailModal';
-import EntryTable from '../components/EntryTable';
-import { ClearableInput, ClearableSelect } from '../components/FilterControls';
-import { PageTitle } from '../components/Layout';
+import EntryTimeline from '../components/EntryTimeline';
 import LoadingState from '../components/LoadingState';
-import Pagination, { getPageItems } from '../components/Pagination';
-import StatusPill from '../components/StatusPill';
-import SummaryContent from '../components/SummaryContent';
-import TagList from '../components/TagList';
-import { useFeeds, useGroup, useGroupCalendar, useGroupEntries, useGroupEntriesBySource, useInvalidateAll } from '../queries';
-import { formatDateTime, splitTags, unique } from '../utils/format';
-import { viewLabel } from '../utils/view';
+import { useToast } from '../components/Toast';
+import { useFeeds, useGroup, useGroupCalendar, useGroupEntries, useInvalidateAll } from '../queries';
+import { monoAbbr, splitTags, unique } from '../utils/format';
 import { GroupModal } from './GroupsPage';
 
 export default function GroupDetailPage() {
   const navigate = useNavigate();
   const invalidate = useInvalidateAll();
+  const toast = useToast();
   const { groupId: groupIdParam } = useParams();
   const groupId = Number(groupIdParam);
-  const [view, setView] = useState('aggregate');
-  const [filters, setFilters] = useState({ keyword: '', vendor: '', product: '', start: '', end: '' });
+
+  const [tab, setTab] = useState('stream');           // 'stream' | 'members'
+  const [viewMode, setViewMode] = useState('timeline'); // 'timeline' | 'calendar'
+
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [detail, setDetail] = useState(null);
   const [dayItems, setDayItems] = useState(null);
-  const [page, setLocalPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [monthKey, setMonthKey] = useState(null);
+
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(20);
+
+  const [detail, setDetail] = useState(null);
   const [editing, setEditing] = useState(undefined);
   const [editForm, setEditForm] = useState({});
   const [editBusy, setEditBusy] = useState(false);
@@ -38,42 +37,40 @@ export default function GroupDetailPage() {
 
   const today = new Date().toISOString().slice(0, 10);
   const weekAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const { data: group, isLoading: loading, error: groupError, refetch } = useGroup(groupId);
-  const { data: entries = { total: 0, items: [] }, error: entriesError } = useGroupEntries(groupId, { ...filters, limit: pageSize, offset: (page - 1) * pageSize });
-  const { data: bySource = [] } = useGroupEntriesBySource(groupId, filters, view === 'source');
-  const { data: calendar = [] } = useGroupCalendar(groupId, { ...filters, month }, view === 'calendar');
+
+  const calendarOn = tab === 'stream' && viewMode === 'calendar';
+
+  const { data: group, isLoading, error: groupError, refetch } = useGroup(groupId);
+  const { data: entries = { total: 0, items: [] } } = useGroupEntries(groupId, { limit: pageSize, offset: (page - 1) * pageSize }, tab === 'stream');
+  const { data: calendar = [] } = useGroupCalendar(groupId, { month }, calendarOn);
+  const { data: calendarMonths = [] } = useGroupCalendar(groupId, { month: month.slice(0, 4) }, calendarOn);
+  const { data: monthCal = [] } = useGroupCalendar(groupId, { month: monthKey || '' }, calendarOn && !!monthKey);
   const { data: todayData } = useGroupEntries(groupId, { start: today, end: today, limit: 1 });
   const { data: weekData } = useGroupEntries(groupId, { start: weekAgo, end: today, limit: 1 });
   const { data: feeds = [] } = useFeeds();
-  const error = (groupError || entriesError)?.message || '';
+
   const todayCount = todayData?.total ?? null;
   const weekCount = weekData?.total ?? null;
+  const badCount = group?.bad_feed_count ?? 0;
 
   const vendors = useMemo(() => unique(group?.feeds || [], 'vendor'), [group]);
-  const products = useMemo(() => unique(group?.feeds || [], 'product'), [group]);
-  const sourceGroups = bySource.filter((source) => source.entries.length);
-  const updateFilter = (key, value) => {
-    setLocalPage(1);
-    setDayItems(null);
-    setFilters((current) => (typeof key === 'object' ? { ...current, ...key } : { ...current, [key]: value }));
-  };
-  const resetFilters = () => {
-    setLocalPage(1);
-    setDayItems(null);
-    setFilters({ keyword: '', vendor: '', product: '', start: '', end: '' });
-  };
+
+  // Calendar：与订阅管理/全局动态一致，使用统一的 CalendarGrid + 右侧抽屉
+  const monthDrawer = monthKey ? { date: `${monthKey} 全月`, items: monthCal.flatMap((d) => d.items || []) } : null;
+  const calDrawer = dayItems || monthDrawer;
+  const closeCalDrawer = () => { setDayItems(null); setMonthKey(null); };
 
   function openEdit() {
     if (!group) return;
     setEditErrors({});
-    setEditForm({ ...group, tags: splitTags(group.tags), feed_ids: (group.feeds || []).map((feed) => feed.id) });
+    setEditForm({ ...group, tags: splitTags(group.tags), feed_ids: (group.feeds || []).map((f) => f.id) });
     setEditing(group);
   }
 
   async function submitEdit() {
     const errors = {};
     if (!editForm.name?.trim()) errors.name = '请输入订阅组名称';
-    if (!editForm.feed_ids.length) errors.feed_ids = '请至少选择一个订阅源';
+    if (!editForm.feed_ids?.length) errors.feed_ids = '请至少选择一个订阅源';
     setEditErrors(errors);
     if (Object.keys(errors).length) return;
     const payload = { ...editForm, tags: splitTags(editForm.tags), enabled: Boolean(editForm.enabled), feed_ids: editForm.feed_ids.map(Number) };
@@ -82,6 +79,7 @@ export default function GroupDetailPage() {
       await api.put(`/groups/${groupId}`, payload);
       setEditing(undefined);
       await invalidate();
+      toast.success('订阅组已更新');
     } catch (err) {
       setEditErrors({ name: err.message });
     } finally {
@@ -89,44 +87,209 @@ export default function GroupDetailPage() {
     }
   }
 
-  if (loading) return <><PageTitle title="订阅组详情" subtitle="正在加载订阅组信息..." /><LoadingState title="正在加载订阅组..." rows={4} /></>;
-  if (!group) return <><PageTitle title="订阅组详情" subtitle="无法加载订阅组信息" actions={<button onClick={() => refetch()}><Database size={17} />重试</button>} />{error && <div className="form-error">{error}</div>}</>;
+  async function deleteGroup() {
+    if (!group) return;
+    if (!confirm(`确认删除订阅组「${group.name}」？`)) return;
+    setEditBusy(true);
+    try {
+      await api.delete(`/groups/${groupId}`);
+      await invalidate();
+      toast.success('订阅组已删除');
+      navigate('/groups');
+    } catch (err) {
+      toast.error(err.message);
+      setEditBusy(false);
+    }
+  }
+
+  if (isLoading) return <LoadingState title="正在加载订阅组…" rows={4} />;
+  if (!group) {
+    return (
+      <div className="state-panel">
+        <p>无法加载订阅组</p>
+        <button onClick={() => refetch()}>重试</button>
+      </div>
+    );
+  }
+
+  const feedCount = group.feeds?.length ?? 0;
+
   return (
     <>
-      <PageTitle title="订阅组详情" subtitle="查看订阅组内聚合动态，支持聚合列表、按源分组与日历切换" actions={<><button onClick={() => navigate(-1)}><ArrowLeft size={18} />返回列表</button><button onClick={openEdit} disabled={editBusy}><Edit3 size={17} />编辑</button><button onClick={() => invalidate()}>刷新</button></>} />
-      {error && <div className="form-error">{error}</div>}
-      <section className="detail-hero group-hero">
-        <div className="hero-title"><div className="big-icon"><Users size={36} /></div><div><h2>{group.name}</h2><p>{group.description}</p></div></div>
-        <div className="group-stat-rail"><article><List /><span>今日新增</span><b>{todayCount ?? '-'}</b></article><article><CalendarDays /><span>最近7天新增</span><b>{weekCount ?? '-'}</b></article><article><Grid2X2 /><span>订阅源数量</span><b>{group.feeds.length}</b></article></div>
-        <div className="detail-columns"><dl><dt>订阅组 ID</dt><dd className="copy-line"><span>{group.id}</span><CopyButton text={String(group.id)} label="复制 ID" /></dd><dt>包含订阅数</dt><dd>{group.feeds.length}</dd><dt>默认视图</dt><dd>{viewLabel(group.default_view)}</dd><dt>当前状态</dt><dd><StatusPill status="normal" enabled={group.enabled} /></dd></dl><dl><dt>关联标签</dt><dd><TagList tags={group.tags} /></dd><dt>来源厂商</dt><dd>{vendors.join('、') || '-'}</dd><dt>最近更新时间</dt><dd>{formatDateTime(entries.items[0]?.published_at)}</dd></dl></div>
-      </section>
-      <section className="panel filterable-panel">
-        <div className="tabs"><button className={view === 'aggregate' ? 'active' : ''} onClick={() => setView('aggregate')}><List size={16} />聚合列表</button><button className={view === 'source' ? 'active' : ''} onClick={() => setView('source')}>按源分组</button><button className={view === 'calendar' ? 'active' : ''} onClick={() => setView('calendar')}>日历视图</button><ClearableInput className="tabs-search" value={filters.keyword} onChange={(value) => updateFilter('keyword', value)} placeholder="搜索标题、摘要或来源订阅源" label="订阅组动态搜索" icon={<Search size={16} />} /></div>
-        <div className="filter-bar group-detail-filter-bar"><DateRangeFilter start={filters.start} end={filters.end} onChange={updateFilter} /><ClearableSelect value={filters.vendor} onChange={(value) => updateFilter('vendor', value)} label="厂商"><option value="">厂商</option>{vendors.map((item) => <option key={item}>{item}</option>)}</ClearableSelect><ClearableSelect value={filters.product} onChange={(value) => updateFilter('product', value)} label="产品"><option value="">产品</option>{products.map((item) => <option key={item}>{item}</option>)}</ClearableSelect><button type="button" onClick={resetFilters}>重置筛选</button></div>
-        {view === 'aggregate' && <><EntryTable entries={entries.items} onDetail={setDetail} /><Pagination total={entries.total} page={page} pageSize={pageSize} onPageChange={setLocalPage} onPageSizeChange={(size) => { setPageSize(size); setLocalPage(1); }} /></>}
-        {view === 'source' && <SourceGroupedList groups={sourceGroups} />}
-        {view === 'calendar' && <div className="calendar-layout"><CalendarGrid days={calendar} month={month} onMonthChange={(value) => { setDayItems(null); setMonth(value); }} onDayClick={setDayItems} />{dayItems && <DayEntriesPanel dayItems={dayItems} onClose={() => setDayItems(null)} onDetail={setDetail} />}</div>}
-      </section>
+      {/* Breadcrumb */}
+      <nav className="breadcrumb">
+        <Link to="/groups">订阅组管理</Link>
+        <span>/</span>
+        <span style={{ color: 'var(--ink-2)' }}>{group.name}</span>
+      </nav>
+
+      {/* Group Header */}
+      <div className="group-header">
+        <div className="group-header-left">
+          <div className="group-icon-box">
+            <Database size={24} />
+          </div>
+          <div>
+            <div className="group-title">{group.name}</div>
+            {group.description && <div className="group-desc">{group.description}</div>}
+          </div>
+        </div>
+        <div className="group-header-actions">
+          <button className="underline-btn" onClick={openEdit} disabled={editBusy}>
+            <Plus size={14} />
+            添加订阅源
+          </button>
+          <button className="underline-btn" onClick={openEdit} disabled={editBusy}>
+            编辑
+          </button>
+          <button className="underline-btn underline-btn-danger" onClick={deleteGroup} disabled={editBusy}>
+            <Trash2 size={14} />
+            删除
+          </button>
+        </div>
+      </div>
+
+      {/* Stat Strip */}
+      <div className="stat-strip">
+        <div className="stat-strip-item">
+          <div className="stat-label">订阅源</div>
+          <div className="stat-value">{feedCount}</div>
+        </div>
+        <div className="stat-strip-item">
+          <div className="stat-label">今日动态</div>
+          <div className="stat-value stat-value-accent">{todayCount ?? '–'}</div>
+        </div>
+        <div className="stat-strip-item">
+          <div className="stat-label">近 7 天</div>
+          <div className="stat-value">{weekCount ?? '–'}</div>
+        </div>
+        <div className="stat-strip-item">
+          <div className="stat-label">异常源</div>
+          <div className={`stat-value ${badCount > 0 ? 'stat-value-warm' : ''}`}>{badCount}</div>
+        </div>
+      </div>
+
+      {/* Tab Bar */}
+      <div className="tab-bar">
+        <button className={`tab-btn ${tab === 'stream' ? 'active' : ''}`} onClick={() => setTab('stream')}>
+          聚合动态流
+        </button>
+        <button className={`tab-btn ${tab === 'members' ? 'active' : ''}`} onClick={() => setTab('members')}>
+          组内订阅源 · {feedCount}
+        </button>
+      </div>
+
+      {/* Tab: 聚合动态流 */}
+      {tab === 'stream' && (
+        <div>
+          {/* Controls */}
+          <div className="timeline-controls">
+            {viewMode === 'timeline' && <span className="timeline-order">按时间倒序</span>}
+            {viewMode === 'calendar' && <span className="timeline-order">日历视图</span>}
+            <div className="view-toggle">
+              <button
+                className={`view-toggle-btn ${viewMode === 'timeline' ? 'active' : ''}`}
+                onClick={() => setViewMode('timeline')}
+                title="时间线视图"
+              >
+                <List size={14} />
+              </button>
+              <button
+                className={`view-toggle-btn ${viewMode === 'calendar' ? 'active' : ''}`}
+                onClick={() => setViewMode('calendar')}
+                title="日历视图"
+              >
+                <CalendarDays size={14} />
+              </button>
+            </div>
+          </div>
+
+          {/* Timeline View */}
+          {viewMode === 'timeline' && (
+            <div className="timeline-list">
+              <EntryTimeline entries={entries.items} timeFormat="time" onDetail={setDetail} />
+              <div className="pagination-bar" style={{ borderTop: '1px solid var(--line)', marginTop: 0 }}>
+                <span className="result-count">共 {entries.total} 条</span>
+                <div className="pagination-controls">
+                  <button
+                    className="page-button icon-page"
+                    disabled={page <= 1}
+                    onClick={() => setPage(page - 1)}
+                  >‹</button>
+                  <span style={{ fontSize: 13, color: 'var(--muted)' }}>{page} / {Math.max(1, Math.ceil(entries.total / pageSize))}</span>
+                  <button
+                    className="page-button icon-page"
+                    disabled={page >= Math.ceil(entries.total / pageSize)}
+                    onClick={() => setPage(page + 1)}
+                  >›</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Calendar View */}
+          {viewMode === 'calendar' && (
+            <div className={`calendar-layout ${calDrawer ? 'has-drawer' : ''}`}>
+              <CalendarGrid
+                days={calendar}
+                monthlyDays={calendarMonths}
+                month={month}
+                onMonthChange={(value) => { closeCalDrawer(); setMonth(value); }}
+                onDayClick={(d) => { setMonthKey(null); setDayItems(d); }}
+                onMonthClick={(m) => { setDayItems(null); setMonthKey(m); }}
+              />
+              {calDrawer && <DayEntriesPanel dayItems={calDrawer} onClose={closeCalDrawer} onDetail={setDetail} />}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: 组内订阅源 */}
+      {tab === 'members' && (
+        <div className="member-list">
+          {(group.feeds || []).map((feed) => {
+            const abbr = monoAbbr(feed.vendor || feed.name);
+            const isOk = feed.status !== 'fetch_failed' && feed.status !== 'parse_error';
+            return (
+              <div
+                key={feed.id}
+                className="member-item"
+                style={{ cursor: 'pointer' }}
+                onClick={() => navigate(`/feeds/${feed.id}`)}
+              >
+                <span className="member-mono">{abbr}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="member-name">{feed.name}</div>
+                  <div className="member-vendor">{feed.vendor}</div>
+                </div>
+                <span className={`status-dot ${isOk ? 'status-dot-ok' : 'status-dot-bad'}`} />
+                <span className="member-today">–</span>
+              </div>
+            );
+          })}
+          {!(group.feeds || []).length && (
+            <div className="state-panel">暂无订阅源</div>
+          )}
+        </div>
+      )}
+
+      {/* Entry Detail Modal */}
       <EntryDetailModal entry={detail} onClose={() => setDetail(null)} />
-      {editing !== undefined && <GroupModal form={editForm} setForm={setEditForm} feeds={feeds} title="编辑订阅组" busy={editBusy} errors={editErrors} onClose={() => setEditing(undefined)} onSubmit={submitEdit} />}
+
+      {/* Edit Group Modal */}
+      {editing !== undefined && (
+        <GroupModal
+          form={editForm}
+          setForm={setEditForm}
+          feeds={feeds}
+          title="编辑订阅组"
+          busy={editBusy}
+          errors={editErrors}
+          onClose={() => setEditing(undefined)}
+          onSubmit={submitEdit}
+        />
+      )}
+
     </>
-  );
-}
-
-function SourceGroupedList({ groups }) {
-  return <div className="source-group-list">{groups.map((group) => <article key={group.feed_id} className="source-group"><header><div><h3>{group.feed_name}</h3><p>{group.vendor} / {group.product}</p></div><b>{group.entries.length} 条</b><span>最近更新：{formatDateTime(group.entries[0]?.published_at)}</span></header><ul>{group.entries.map((entry) => <li key={entry.id}><time>{formatDateTime(entry.published_at).slice(0, 10)}</time><a href={entry.link} target="_blank" rel="noreferrer">{entry.title}</a><small><SummaryContent value={entry.summary} compact /></small></li>)}</ul></article>)}{!groups.length && <p className="empty-cell">暂无匹配的分组动态</p>}</div>;
-}
-
-function DayEntriesPanel({ dayItems, onClose, onDetail }) {
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const items = dayItems.items || [];
-  const pagedItems = getPageItems(items, page, pageSize);
-  return (
-    <section className="panel day-drawer">
-      <div className="panel-header"><h2>{dayItems.date} 动态</h2><button onClick={onClose}>关闭</button></div>
-      <EntryTable entries={pagedItems} compact onDetail={onDetail} />
-      <Pagination total={items.length} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
-    </section>
   );
 }

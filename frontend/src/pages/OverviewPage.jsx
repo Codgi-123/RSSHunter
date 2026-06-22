@@ -1,17 +1,102 @@
-import { AlertTriangle, Database, Eye, FileText, Folder, Layers, RefreshCw, Rss, Server, Share2, Users } from 'lucide-react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '../api';
-import ActionDialog from '../components/ActionDialog';
-import MetricCard from '../components/MetricCard';
-import Pagination, { getPageItems } from '../components/Pagination';
-import StatusPill from '../components/StatusPill';
-import VendorBadge from '../components/VendorBadge';
 import LoadingState from '../components/LoadingState';
-import { PageTitle } from '../components/Layout';
+import { useToast } from '../components/Toast';
 import { useInvalidateAll, useOverview } from '../queries';
-import { formatDateTime } from '../utils/format';
+import { formatShortDateTime, splitTags } from '../utils/format';
+
+function StatDelta({ text, tone = 'good', dir = 'up' }) {
+  if (!text) return <div className="stat-delta"><span className="stat-delta-flat">较昨日持平</span></div>;
+  const Arrow = dir === 'down' ? ArrowDown : ArrowUp;
+  return (
+    <div className="stat-delta">
+      <span className={`stat-delta-val ${tone}`}><Arrow size={11} strokeWidth={3} />{text}</span>
+      <span className="stat-delta-sub">较昨日</span>
+    </div>
+  );
+}
+
+const ACCENT = 'oklch(0.45 0.14 255)';
+
+// 把 raw 值向上取整到 1/2/5 × 10^n 的「好看」刻度。
+function niceStep(value) {
+  if (value <= 0) return 1;
+  const pow = Math.pow(10, Math.floor(Math.log10(value)));
+  const f = value / pow;
+  const nf = f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10;
+  return nf * pow;
+}
+
+function fmtTick(v) {
+  if (v >= 1000) return `${(v / 1000).toString().replace(/\.0$/, '')}k`;
+  return String(v);
+}
+
+function TrendChart({ data }) {
+  const W = 680;
+  const H = 230;
+  const padL = 38;
+  const padR = 18;
+  const padT = 30;
+  const padB = 28;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+
+  const rawMax = Math.max(1, ...data.map((d) => d.count));
+  const step = niceStep(rawMax / 4);
+  const max = step * 4;
+  const baseY = padT + innerH;
+
+  const x = (i) => padL + (data.length < 2 ? innerW / 2 : (innerW * i) / (data.length - 1));
+  const y = (c) => padT + innerH - (innerH * c) / max;
+
+  const pts = data.map((d, i) => [x(i), y(d.count)]);
+  const linePoints = pts.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+  const areaPoints = `${x(0).toFixed(1)},${baseY} ${linePoints} ${x(data.length - 1).toFixed(1)},${baseY}`;
+  const ticks = [1, 2, 3, 4].map((k) => k * step);
+  const gid = 'trendArea';
+  const mono = { fontFamily: 'IBM Plex Mono' };
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ width: '100%', height: '100%', display: 'block' }} role="img" aria-label="最近 7 天动态趋势">
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={ACCENT} stopOpacity="0.14" />
+          <stop offset="100%" stopColor={ACCENT} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      {/* gridlines + y 轴刻度 */}
+      <line x1={padL} y1={baseY} x2={W - padR} y2={baseY} stroke="var(--line)" />
+      {ticks.map((v) => (
+        <g key={v}>
+          <line x1={padL} y1={y(v)} x2={W - padR} y2={y(v)} stroke="var(--line-3)" />
+          <text x={padL - 8} y={y(v) + 3} textAnchor="end" style={{ ...mono, fontSize: 10, fill: 'var(--faint-2)' }}>{fmtTick(v)}</text>
+        </g>
+      ))}
+
+      {/* 面积 + 折线 */}
+      <polygon points={areaPoints} fill={`url(#${gid})`} />
+      <polyline fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={linePoints} />
+
+      {/* 数据点 + 数值标签 + x 轴日期 */}
+      {data.map((d, i) => {
+        const isLast = i === data.length - 1;
+        return (
+          <g key={d.date}>
+            {isLast
+              ? <circle cx={x(i)} cy={y(d.count)} r="4" fill="#fff" stroke={ACCENT} strokeWidth="2.5" />
+              : <circle cx={x(i)} cy={y(d.count)} r="3" fill={ACCENT} />}
+            <text x={x(i)} y={y(d.count) - 10} textAnchor="middle" style={{ ...mono, fontSize: 11, fontWeight: 600, fill: 'var(--ink)' }}>{d.count}</text>
+            <text x={x(i)} y={H - 8} textAnchor="middle" style={{ ...mono, fontSize: 10, fill: 'var(--faint)' }}>{d.date}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
 
 function normalizeTrend(rows = []) {
   const map = Object.fromEntries(rows.map((row) => [row.date, row.count]));
@@ -23,140 +108,186 @@ function normalizeTrend(rows = []) {
   });
 }
 
-const groupIcons = [Database, Layers, Server, Share2, Folder];
+const GROUP_SWATCHES = [
+  'oklch(0.55 0.12 255)',
+  'oklch(0.6 0.14 35)',
+  'oklch(0.55 0.12 165)',
+  'oklch(0.6 0.1 310)',
+  'oklch(0.6 0.12 80)',
+];
+
+function anomalyStatus(feed) {
+  const status = feed.enabled ? feed.status : 'disabled';
+  const map = {
+    fetch_failed: ['抓取失败', 'oklch(0.5 0.1 35)'],
+    parse_error: ['解析异常', 'oklch(0.5 0.09 70)'],
+    disabled: ['已停用', 'var(--faint)'],
+  };
+  return map[status] || [status || '-', 'var(--faint)'];
+}
+
+const today = new Date().toISOString().slice(0, 10);
 
 export default function OverviewPage() {
   const navigate = useNavigate();
   const invalidate = useInvalidateAll();
   const { data: overview = {}, isLoading } = useOverview();
-  const [recentPage, setRecentPage] = useState(1);
-  const [recentPageSize, setRecentPageSize] = useState(5);
-  const [abnormalPage, setAbnormalPage] = useState(1);
-  const [abnormalPageSize, setAbnormalPageSize] = useState(5);
+  const toast = useToast();
   const [busyFeedId, setBusyFeedId] = useState(null);
-  const [message, setMessage] = useState('');
+
   const trend = normalizeTrend(overview.trend);
   const stats = overview.stats || {};
+  const deltas = overview.deltas || {};
   const recentFeeds = overview.recent_feeds || [];
   const abnormalFeeds = overview.abnormal_feeds || [];
-  const pagedRecentFeeds = getPageItems(recentFeeds, recentPage, recentPageSize);
-  const pagedAbnormalFeeds = getPageItems(abnormalFeeds, abnormalPage, abnormalPageSize);
+  const groups = overview.groups || [];
+  const entriesPct = deltas.today_entries_pct;
 
-  function openFeed(feed) {
-    navigate(`/feeds/${feed.id}`);
-  }
-
-  function openGroup(group) {
-    navigate(`/groups/${group.id}`);
-  }
-
-  async function retryFeed(feed) {
+  async function feedAction(feed, path, verb) {
     setBusyFeedId(feed.id);
-    setMessage('');
     try {
-      await api.post(`/feeds/${feed.id}/refresh`, {});
+      await api.post(`/feeds/${feed.id}/${path}`, {});
       await invalidate();
-      setMessage(`订阅「${feed.name}」已重试`);
+      toast.success(`订阅「${feed.name}」已${verb}`);
     } catch (err) {
-      setMessage(err.message);
+      toast.error(err.message);
     } finally {
       setBusyFeedId(null);
     }
   }
 
-  if (isLoading) return <><PageTitle title="首页概览" subtitle="正在加载平台数据..." /><LoadingState title="正在加载平台数据..." rows={4} /></>;
+  if (isLoading) return <LoadingState title="正在加载平台数据…" rows={4} />;
 
   return (
     <>
-      <PageTitle title="首页概览" subtitle="快速查看 RSS 平台整体状态、最新动态与异常订阅源" />
-      {message && <div className="inline-status"><span>{message}</span><button onClick={() => setMessage('')}>关闭</button></div>}
-      <section className="metric-grid">
-        <MetricCard icon={FileText} label="今日新增动态" value={stats.today_entries ?? 0} hint="今日新增的动态条目总数" onClick={() => navigate('/entries')} />
-        <MetricCard icon={Rss} label="订阅源总数" value={stats.feed_count ?? 0} tone="green" hint="当前已配置的 RSS 订阅源总数" onClick={() => navigate('/feeds')} />
-        <MetricCard icon={Users} label="订阅组总数" value={stats.group_count ?? 0} tone="purple" hint="当前已创建的订阅组总数" onClick={() => navigate('/groups')} />
-        <MetricCard icon={AlertTriangle} label="异常订阅源" value={stats.abnormal_count ?? 0} tone="red" hint="当前存在异常的订阅源数量" onClick={() => navigate('/status')} />
-      </section>
-
-      <section className="content-split">
-        <div className="panel trend-panel">
-          <div className="panel-header"><h2>最近 7 天动态趋势</h2><span className="status-pill status-muted">近 7 天</span></div>
-          <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={trend} margin={{ top: 16, right: 24, left: 0, bottom: 0 }}>
-              <defs><linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#1b63f4" stopOpacity={0.25} /><stop offset="95%" stopColor="#1b63f4" stopOpacity={0} /></linearGradient></defs>
-              <CartesianGrid stroke="#e7edf7" />
-              <XAxis dataKey="date" tickLine={false} axisLine={false} />
-              <YAxis tickLine={false} axisLine={false} />
-              <Tooltip />
-              <Area type="monotone" dataKey="count" stroke="#1b63f4" strokeWidth={3} fill="url(#trendFill)" />
-            </AreaChart>
-          </ResponsiveContainer>
+      {/* Page head */}
+      <div className="overview-head">
+        <div>
+          <div className="overview-eyebrow">OVERVIEW / 首页概览</div>
+          <div className="overview-title">今日数据库动态</div>
         </div>
-        <div className="panel">
-          <div className="panel-header"><h2>最近更新订阅源</h2><button className="link-button" onClick={() => navigate('/feeds')}>查看更多</button></div>
-          <table className="data-table compact-table">
-            <thead><tr><th>订阅源名称</th><th>最近更新时间</th><th>今日新增</th></tr></thead>
-            <tbody>
-              {pagedRecentFeeds.map((feed) => (
-                <tr key={feed.id}>
-                  <td><button className="table-title-link cell-with-icon" onClick={() => openFeed(feed)}><Rss size={15} />{feed.name}</button></td>
-                  <td>{formatDateTime(feed.latest_item_published_at)}</td>
-                  <td className="number-link">{feed.today_new || 0}</td>
-                </tr>
-              ))}
-              {!recentFeeds.length && <tr><td colSpan="3" className="empty-cell">暂无最近更新订阅源</td></tr>}
-            </tbody>
-          </table>
-          <Pagination total={recentFeeds.length} page={recentPage} pageSize={recentPageSize} onPageChange={setRecentPage} onPageSizeChange={(size) => { setRecentPageSize(size); setRecentPage(1); }} />
-        </div>
-      </section>
+        <div className="overview-head-meta">{today} · 数据每 5 分钟刷新</div>
+      </div>
 
-      <section className="panel">
-        <div className="panel-header"><h2>常用订阅组</h2><button className="link-button" onClick={() => navigate('/groups')}>管理订阅组</button></div>
-        <div className="quick-group-grid">
-          {(overview.groups || []).map((group, index) => {
-            const GroupIcon = groupIcons[index % groupIcons.length];
-            return (
-              <article className="quick-group-card" key={group.id} onClick={() => openGroup(group)} style={{ cursor: 'pointer' }}>
-                <div className={`symbol-card color-${index % 5}`}><GroupIcon size={24} /></div>
-                <button className="card-title-link" onClick={(e) => { e.stopPropagation(); openGroup(group); }}>{group.name}</button>
-                <span className="entity-id">ID {group.id}</span>
-                <p><span>包含订阅数</span><b>{group.feed_count || 0}</b></p>
-                <p><span>今日新增</span><b>{group.today_new || 0}</b></p>
-                <p><span>最近更新时间</span><b>{formatDateTime(group.latest_update)}</b></p>
-              </article>
-            );
-          })}
+      {/* KPIs */}
+      <div className="stat-strip editorial">
+        <div className="stat-strip-item clickable" onClick={() => navigate('/entries')}>
+          <div className="stat-label">今日新增动态</div>
+          <div className="stat-value stat-value-accent">{stats.today_entries ?? 0}</div>
+          <StatDelta
+            text={entriesPct == null ? null : `${Math.abs(entriesPct)}%`}
+            tone={entriesPct >= 0 ? 'good' : 'warm'}
+            dir={entriesPct >= 0 ? 'up' : 'down'}
+          />
         </div>
-      </section>
+        <div className="stat-strip-item clickable" onClick={() => navigate('/feeds')}>
+          <div className="stat-label">订阅源总数</div>
+          <div className="stat-value">{stats.feed_count ?? 0}</div>
+          <StatDelta text={deltas.feed_added ? `${deltas.feed_added} 个` : null} />
+        </div>
+        <div className="stat-strip-item clickable" onClick={() => navigate('/groups')}>
+          <div className="stat-label">订阅组总数</div>
+          <div className="stat-value">{stats.group_count ?? 0}</div>
+          <StatDelta text={deltas.group_added ? `${deltas.group_added} 个` : null} />
+        </div>
+        <div className="stat-strip-item clickable" onClick={() => navigate('/feeds?status=abnormal')}>
+          <div className="stat-label">异常订阅源</div>
+          <div className={`stat-value ${(stats.abnormal_count ?? 0) > 0 ? 'stat-value-warm' : ''}`}>{stats.abnormal_count ?? 0}</div>
+        </div>
+      </div>
 
-      <section className="panel">
-        <div className="panel-header"><h2>异常订阅源</h2><button className="link-button" onClick={() => navigate('/status')}>查看更多</button></div>
-        <table className="data-table">
-          <thead><tr><th>订阅名称</th><th>厂商</th><th>产品</th><th>异常类型</th><th>最近抓取时间</th><th>操作</th></tr></thead>
-          <tbody>
-            {pagedAbnormalFeeds.map((feed) => (
-              <tr key={feed.id}>
-                <td><button className="table-title-link" onClick={() => openFeed(feed)}>{feed.name}</button></td>
-                <td><VendorBadge vendor={feed.vendor} /></td>
-                <td>{feed.product}</td>
-                <td><StatusPill status={feed.status} enabled={feed.enabled} /></td>
-                <td>{formatDateTime(feed.last_fetched_at)}</td>
-                <td className="row-actions action-cell">
-                  <ActionDialog
-                    title={feed.name}
-                    actions={[
-                      { label: '查看详情', icon: <Eye size={16} />, onClick: () => openFeed(feed) },
-                      { label: '重试抓取', icon: <RefreshCw size={16} />, primary: true, disabled: busyFeedId === feed.id, onClick: () => retryFeed(feed) },
-                    ]}
-                  />
-                </td>
-              </tr>
+      {/* Trend + Recent */}
+      <div className="overview-grid">
+        <div className="overview-col">
+          <div className="ed-head"><span>最近 7 天动态趋势</span></div>
+          <div className="trend-chart">
+            <TrendChart data={trend} />
+          </div>
+        </div>
+
+        <div className="overview-col">
+          <div className="ed-head">
+            <span>最近更新订阅源</span>
+            <button className="ed-link" onClick={() => navigate('/feeds')}>ALL →</button>
+          </div>
+          <div className="recent-list">
+            {recentFeeds.map((feed) => (
+              <a key={feed.id} className="recent-row" onClick={() => navigate(`/feeds/${feed.id}`)}>
+                <div className="recent-row-main">
+                  <div className="recent-row-name">{feed.name}</div>
+                  <div className="recent-row-tags">
+                    {splitTags(feed.tags).slice(0, 2).map((tag) => (
+                      <span className="recent-tag" key={tag}>{tag}</span>
+                    ))}
+                  </div>
+                </div>
+                <span className="recent-row-num">+{feed.today_new || 0}</span>
+              </a>
             ))}
-            {!abnormalFeeds.length && <tr><td colSpan="6" className="empty-cell">暂无异常订阅源</td></tr>}
-          </tbody>
-        </table>
-        <Pagination total={abnormalFeeds.length} page={abnormalPage} pageSize={abnormalPageSize} onPageChange={setAbnormalPage} onPageSizeChange={(size) => { setAbnormalPageSize(size); setAbnormalPage(1); }} />
-      </section>
+            {!recentFeeds.length && <div className="state-panel">暂无最近更新订阅源</div>}
+          </div>
+        </div>
+      </div>
+
+      {/* Groups */}
+      <div className="overview-section-head">
+        <span>常用订阅组</span>
+        <button className="ed-link" onClick={() => navigate('/groups')}>管理订阅组 →</button>
+      </div>
+      {groups.length ? (
+        <div className="group-grid">
+          {groups.map((group, index) => (
+            <a className="group-grid-item" key={group.id} onClick={() => navigate(`/groups/${group.id}`)}>
+              <div className="group-grid-name-line">
+                <span className="group-swatch" style={{ background: GROUP_SWATCHES[index % GROUP_SWATCHES.length] }} />
+                <span className="group-grid-name">{group.name}</span>
+              </div>
+              <div className="group-grid-num">{group.feed_count || 0}<span>订阅</span></div>
+              <div className="group-grid-today">+{group.today_new || 0} 今日</div>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <div className="state-panel">暂无订阅组</div>
+      )}
+
+      {/* Anomalies */}
+      {abnormalFeeds.length > 0 && (
+        <>
+          <div className="overview-section-head">
+            <div className="anomaly-title">
+              <span className="status-dot status-dot-bad" />
+              <span>异常订阅源</span>
+              <span className="anomaly-count">· 需处理 {stats.abnormal_count ?? abnormalFeeds.length} 项</span>
+            </div>
+            <button className="ed-link" onClick={() => navigate('/feeds?status=abnormal')}>查看全部 →</button>
+          </div>
+          <div className="anomaly-table">
+            <div className="anomaly-head">
+              <span>订阅名称</span><span>厂商</span><span>产品</span><span>异常类型</span><span>最近抓取</span><span className="ta-right">操作</span>
+            </div>
+            {abnormalFeeds.map((feed) => {
+              const [label, color] = anomalyStatus(feed);
+              return (
+                <div className="anomaly-row" key={feed.id}>
+                  <span className="anomaly-name">{feed.name}</span>
+                  <span className="anomaly-sub">{feed.vendor || '-'}</span>
+                  <span className="anomaly-sub">{feed.product || '-'}</span>
+                  <span className="anomaly-type" style={{ color }}>{label}</span>
+                  <span className="anomaly-time">{formatShortDateTime(feed.last_fetched_at) || '-'}</span>
+                  <span className="anomaly-actions">
+                    <button className="ed-link" onClick={() => navigate(`/feeds/${feed.id}`)}>查看</button>
+                    <span className="anomaly-sep">·</span>
+                    {feed.enabled
+                      ? <button className="ed-link" disabled={busyFeedId === feed.id} onClick={() => feedAction(feed, 'refresh', '重试')}>重试</button>
+                      : <button className="ed-link" disabled={busyFeedId === feed.id} onClick={() => feedAction(feed, 'enable', '启用')}>启用</button>}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
     </>
   );
 }

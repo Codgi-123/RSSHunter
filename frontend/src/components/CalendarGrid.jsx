@@ -1,70 +1,74 @@
-import { useMemo, useState } from 'react';
-import MonthPicker from './MonthPicker';
-import { formatDate } from '../utils/format';
+import dayjs from 'dayjs';
+import { useEffect, useMemo, useState } from 'react';
 
-function monthCells(month) {
-  const base = month ? new Date(`${month}-01T00:00:00`) : new Date();
-  const year = base.getFullYear();
-  const monthIndex = base.getMonth();
-  const first = new Date(year, monthIndex, 1);
-  const start = new Date(first);
-  start.setDate(first.getDate() - first.getDay());
-  return Array.from({ length: 42 }, (_, index) => {
-    const day = new Date(start);
-    day.setDate(start.getDate() + index);
-    return day;
-  });
-}
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 
-function monthBuckets(days) {
-  const map = new Map();
-  days.forEach((day) => {
-    const month = day.date.slice(0, 7);
-    const bucket = map.get(month) || { date: month, count: 0, items: [] };
-    bucket.count += day.count || 0;
-    bucket.items.push(...(day.items || []));
-    map.set(month, bucket);
-  });
-  return map;
-}
-
-export default function CalendarGrid({ days = [], month, onMonthChange, onDayClick }) {
+export default function CalendarGrid({ days = [], monthlyDays = [], month, onMonthChange, onDayClick, onMonthClick }) {
   const [mode, setMode] = useState('day');
+  const [selectedKey, setSelectedKey] = useState(null);
   const dayMap = useMemo(() => Object.fromEntries(days.map((day) => [day.date, day])), [days]);
-  const monthMap = useMemo(() => monthBuckets(days), [days]);
-  const max = Math.max(1, ...days.map((day) => day.count || 0));
+  const monthMap = useMemo(() => Object.fromEntries(monthlyDays.map((m) => [m.date, m])), [monthlyDays]);
   const activeMonth = month || new Date().toISOString().slice(0, 7);
   const activeYear = Number(activeMonth.slice(0, 4));
 
+  useEffect(() => { setSelectedKey(null); }, [activeMonth, mode]);
+
+  function handleDay(key, data) {
+    setSelectedKey(key);
+    onDayClick?.(data);
+  }
+
+  function pickMonth(monthKey, data) {
+    setSelectedKey(monthKey);
+    onMonthClick?.(monthKey, data);
+  }
+
   return (
-    <section className="panel calendar-panel">
-      <div className="panel-header calendar-header">
-        <h2>日历视图</h2>
-        <div className="calendar-tools">
-          <div className="segmented-control" role="group" aria-label="日历粒度"><button type="button" className={mode === 'day' ? 'active' : ''} aria-pressed={mode === 'day'} onClick={() => setMode('day')}>按天</button><button type="button" className={mode === 'month' ? 'active' : ''} aria-pressed={mode === 'month'} onClick={() => setMode('month')}>按月</button></div>
-          <MonthPicker value={activeMonth} onChange={onMonthChange} />
+    <div className="calendar-panel">
+      <div className="calendar-toolbar">
+        <div className="segmented-control" role="group" aria-label="日历粒度">
+          <button type="button" className={mode === 'day' ? 'active' : ''} aria-pressed={mode === 'day'} onClick={() => setMode('day')}>按天</button>
+          <button type="button" className={mode === 'month' ? 'active' : ''} aria-pressed={mode === 'month'} onClick={() => setMode('month')}>按月</button>
         </div>
+        <input type="month" className="month-picker-trigger" aria-label="选择月份" value={activeMonth} onChange={(e) => e.target.value && onMonthChange(e.target.value)} />
       </div>
-      {mode === 'day' ? <DayGrid activeMonth={activeMonth} dayMap={dayMap} max={max} onDayClick={onDayClick} /> : <MonthGrid year={activeYear} monthMap={monthMap} onMonthChange={onMonthChange} onDayClick={onDayClick} />}
-    </section>
+      {mode === 'day'
+        ? <DayGrid activeMonth={activeMonth} dayMap={dayMap} selectedKey={selectedKey} onDayClick={handleDay} />
+        : <MonthGrid year={activeYear} monthMap={monthMap} selectedKey={selectedKey} onPickMonth={pickMonth} />}
+    </div>
   );
 }
 
-function DayGrid({ activeMonth, dayMap, max, onDayClick }) {
+function DayGrid({ activeMonth, dayMap, selectedKey, onDayClick }) {
+  const first = dayjs(`${activeMonth}-01`);
+  const firstWeekday = first.day();
+  const daysInMonth = first.daysInMonth();
+  const cells = [
+    ...Array.from({ length: firstWeekday }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+
   return (
     <>
-      <div className="week-row">{['日', '一', '二', '三', '四', '五', '六'].map((day) => <span key={day}>周{day}</span>)}</div>
+      <div className="week-row">{WEEKDAYS.map((d) => <span key={d}>周{d}</span>)}</div>
       <div className="calendar-grid">
-        {monthCells(activeMonth).map((date) => {
-          const key = date.toISOString().slice(0, 10);
+        {cells.map((d, i) => {
+          if (!d) return <div key={`empty-${i}`} className="calendar-cell empty" />;
+          const key = `${activeMonth}-${String(d).padStart(2, '0')}`;
           const data = dayMap[key];
-          const muted = key.slice(0, 7) !== activeMonth;
-          const disabled = muted || !data;
+          const hasData = !!data && data.count > 0;
+          const isSelected = key === selectedKey && hasData;
           return (
-            <button key={key} type="button" disabled={disabled} aria-label={`${key}，${data?.count || 0} 条动态`} className={`calendar-cell ${muted ? 'muted' : ''} ${disabled ? 'disabled' : ''}`} onClick={() => data && onDayClick?.(data)}>
-              <b>{date.getDate()}</b>
-              {data && data.count > 0 && <em style={{ height: 22 + (data.count / max) * 56 }}>{data.count >= 100 ? '99+' : data.count}</em>}
-              <small>{data?.items?.[0]?.title || formatDate(key)}</small>
+            <button
+              key={key}
+              type="button"
+              disabled={!hasData}
+              aria-label={`${key}，${data?.count || 0} 条动态`}
+              className={`calendar-cell ${isSelected ? 'selected' : ''} ${hasData && !isSelected ? 'has-count' : ''} ${!hasData ? 'empty' : ''}`}
+              onClick={() => hasData && onDayClick(key, data)}
+            >
+              <span className={`cal-day-num ${isSelected ? 'selected' : ''} ${hasData ? 'has-count' : ''}`}>{d}</span>
+              {hasData && !isSelected && <span className="cal-day-count">+{data.count >= 1000 ? '999+' : data.count}</span>}
             </button>
           );
         })}
@@ -73,17 +77,25 @@ function DayGrid({ activeMonth, dayMap, max, onDayClick }) {
   );
 }
 
-function MonthGrid({ year, monthMap, onMonthChange, onDayClick }) {
+function MonthGrid({ year, monthMap, selectedKey, onPickMonth }) {
   return (
     <div className="month-grid">
       {Array.from({ length: 12 }, (_, index) => {
         const month = `${year}-${String(index + 1).padStart(2, '0')}`;
-        const data = monthMap.get(month);
+        const data = monthMap[month];
+        const hasData = !!data && data.count > 0;
+        const isSelected = month === selectedKey;
         return (
-          <button key={month} type="button" disabled={!data} aria-label={`${month}，${data?.count || 0} 条动态`} className={`month-cell ${!data ? 'disabled' : ''}`} onClick={() => { onMonthChange?.(month); onDayClick?.({ ...data, date: `${month} 月` }); }}>
-            <b>{index + 1} 月</b>
-            <span>{data ? `${data.count} 条动态` : '暂无动态'}</span>
-            <small>{data?.items?.[0]?.title || `${year} 年 ${index + 1} 月`}</small>
+          <button
+            key={month}
+            type="button"
+            disabled={!hasData}
+            aria-label={`${month}，${data?.count || 0} 条动态`}
+            className={`month-cell ${hasData ? 'has-count' : 'empty'} ${isSelected ? 'selected' : ''}`}
+            onClick={() => hasData && onPickMonth(month, data)}
+          >
+            <span className="month-cell-label">{index + 1} 月</span>
+            <span className={`month-cell-count ${hasData ? 'has-count' : ''}`}>{hasData ? `+${data.count}` : '—'}</span>
           </button>
         );
       })}

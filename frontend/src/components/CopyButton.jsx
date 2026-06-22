@@ -1,5 +1,6 @@
 import { AlertTriangle, Check, Copy } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useToast } from './Toast';
 
 function legacyCopy(text) {
   const textarea = document.createElement('textarea');
@@ -19,7 +20,7 @@ function legacyCopy(text) {
   }
 }
 
-async function writeClipboard(text) {
+export async function writeClipboard(text) {
   if (navigator.clipboard?.writeText && window.isSecureContext) {
     try {
       await navigator.clipboard.writeText(text);
@@ -34,6 +35,7 @@ async function writeClipboard(text) {
 export default function CopyButton({ text, label = '复制' }) {
   const [status, setStatus] = useState('idle');
   const timerRef = useRef(null);
+  const toast = useToast();
 
   useEffect(() => () => window.clearTimeout(timerRef.current), []);
 
@@ -44,8 +46,10 @@ export default function CopyButton({ text, label = '复制' }) {
     try {
       await writeClipboard(text);
       setStatus('copied');
+      toast.success('已复制到剪贴板');
     } catch {
       setStatus('failed');
+      toast.error('复制失败，请手动复制');
     }
     timerRef.current = window.setTimeout(() => setStatus('idle'), 1400);
   }

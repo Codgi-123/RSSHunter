@@ -2,15 +2,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createRoot } from 'react-dom/client';
 import { Navigate, Outlet, RouterProvider, ScrollRestoration, createBrowserRouter } from 'react-router-dom';
 import Layout from './components/Layout';
-import DocsPage from './pages/DocsPage';
+import { ToastProvider } from './components/Toast';
 import EntriesPage from './pages/EntriesPage';
 import FeedDetailPage from './pages/FeedDetailPage';
 import FeedsPage from './pages/FeedsPage';
 import GroupDetailPage from './pages/GroupDetailPage';
 import GroupsPage from './pages/GroupsPage';
 import OverviewPage from './pages/OverviewPage';
-import StatusPage from './pages/StatusPage';
-import '@fontsource-variable/dm-sans';
 import './styles.css';
 
 const queryClient = new QueryClient({
@@ -41,8 +39,7 @@ const router = createBrowserRouter([
       { path: 'groups', element: <GroupsPage /> },
       { path: 'groups/:groupId', element: <GroupDetailPage /> },
       { path: 'entries', element: <EntriesPage /> },
-      { path: 'status', element: <StatusPage /> },
-      { path: 'docs', element: <DocsPage /> },
+      { path: 'status', element: <Navigate to="/feeds?status=abnormal" replace /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },
@@ -50,6 +47,8 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById('root')).render(
   <QueryClientProvider client={queryClient}>
-    <RouterProvider router={router} />
+    <ToastProvider>
+      <RouterProvider router={router} />
+    </ToastProvider>
   </QueryClientProvider>,
 );
