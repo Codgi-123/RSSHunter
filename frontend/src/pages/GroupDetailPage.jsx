@@ -1,4 +1,4 @@
-import { CalendarDays, Database, List, Plus, Trash2 } from 'lucide-react';
+import { Database, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
@@ -19,8 +19,7 @@ export default function GroupDetailPage() {
   const { groupId: groupIdParam } = useParams();
   const groupId = Number(groupIdParam);
 
-  const [tab, setTab] = useState('stream');           // 'stream' | 'members'
-  const [viewMode, setViewMode] = useState('timeline'); // 'timeline' | 'calendar'
+  const [tab, setTab] = useState('stream');           // 'stream' | 'calendar' | 'members'
 
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [dayItems, setDayItems] = useState(null);
@@ -38,7 +37,7 @@ export default function GroupDetailPage() {
   const today = new Date().toISOString().slice(0, 10);
   const weekAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const calendarOn = tab === 'stream' && viewMode === 'calendar';
+  const calendarOn = tab === 'calendar';
 
   const { data: group, isLoading, error: groupError, refetch } = useGroup(groupId);
   const { data: entries = { total: 0, items: [] } } = useGroupEntries(groupId, { limit: pageSize, offset: (page - 1) * pageSize }, tab === 'stream');
@@ -171,76 +170,52 @@ export default function GroupDetailPage() {
 
       {/* Tab Bar */}
       <div className="tab-bar">
-        <button className={`tab-btn ${tab === 'stream' ? 'active' : ''}`} onClick={() => setTab('stream')}>
+        <button className={`tab-btn ${tab === 'stream' ? 'active' : ''}`} onClick={() => { closeCalDrawer(); setTab('stream'); }}>
           聚合动态流
         </button>
-        <button className={`tab-btn ${tab === 'members' ? 'active' : ''}`} onClick={() => setTab('members')}>
+        <button className={`tab-btn ${tab === 'calendar' ? 'active' : ''}`} onClick={() => { closeCalDrawer(); setTab('calendar'); }}>
+          日历视图
+        </button>
+        <button className={`tab-btn ${tab === 'members' ? 'active' : ''}`} onClick={() => { closeCalDrawer(); setTab('members'); }}>
           组内订阅源 · {feedCount}
         </button>
       </div>
 
       {/* Tab: 聚合动态流 */}
       {tab === 'stream' && (
-        <div>
-          {/* Controls */}
-          <div className="timeline-controls">
-            {viewMode === 'timeline' && <span className="timeline-order">按时间倒序</span>}
-            {viewMode === 'calendar' && <span className="timeline-order">日历视图</span>}
-            <div className="view-toggle">
+        <div className="timeline-list">
+          <EntryTimeline entries={entries.items} timeFormat="time" onDetail={setDetail} />
+          <div className="pagination-bar" style={{ borderTop: '1px solid var(--line)', marginTop: 0 }}>
+            <span className="result-count">共 {entries.total} 条</span>
+            <div className="pagination-controls">
               <button
-                className={`view-toggle-btn ${viewMode === 'timeline' ? 'active' : ''}`}
-                onClick={() => setViewMode('timeline')}
-                title="时间线视图"
-              >
-                <List size={14} />
-              </button>
+                className="page-button icon-page"
+                disabled={page <= 1}
+                onClick={() => setPage(page - 1)}
+              >‹</button>
+              <span style={{ fontSize: 13, color: 'var(--muted)' }}>{page} / {Math.max(1, Math.ceil(entries.total / pageSize))}</span>
               <button
-                className={`view-toggle-btn ${viewMode === 'calendar' ? 'active' : ''}`}
-                onClick={() => setViewMode('calendar')}
-                title="日历视图"
-              >
-                <CalendarDays size={14} />
-              </button>
+                className="page-button icon-page"
+                disabled={page >= Math.ceil(entries.total / pageSize)}
+                onClick={() => setPage(page + 1)}
+              >›</button>
             </div>
           </div>
+        </div>
+      )}
 
-          {/* Timeline View */}
-          {viewMode === 'timeline' && (
-            <div className="timeline-list">
-              <EntryTimeline entries={entries.items} timeFormat="time" onDetail={setDetail} />
-              <div className="pagination-bar" style={{ borderTop: '1px solid var(--line)', marginTop: 0 }}>
-                <span className="result-count">共 {entries.total} 条</span>
-                <div className="pagination-controls">
-                  <button
-                    className="page-button icon-page"
-                    disabled={page <= 1}
-                    onClick={() => setPage(page - 1)}
-                  >‹</button>
-                  <span style={{ fontSize: 13, color: 'var(--muted)' }}>{page} / {Math.max(1, Math.ceil(entries.total / pageSize))}</span>
-                  <button
-                    className="page-button icon-page"
-                    disabled={page >= Math.ceil(entries.total / pageSize)}
-                    onClick={() => setPage(page + 1)}
-                  >›</button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Calendar View */}
-          {viewMode === 'calendar' && (
-            <div className={`calendar-layout ${calDrawer ? 'has-drawer' : ''}`}>
-              <CalendarGrid
-                days={calendar}
-                monthlyDays={calendarMonths}
-                month={month}
-                onMonthChange={(value) => { closeCalDrawer(); setMonth(value); }}
-                onDayClick={(d) => { setMonthKey(null); setDayItems(d); }}
-                onMonthClick={(m) => { setDayItems(null); setMonthKey(m); }}
-              />
-              {calDrawer && <DayEntriesPanel dayItems={calDrawer} onClose={closeCalDrawer} onDetail={setDetail} />}
-            </div>
-          )}
+      {/* Tab: 日历视图 */}
+      {tab === 'calendar' && (
+        <div className={`calendar-layout ${calDrawer ? 'has-drawer' : ''}`}>
+          <CalendarGrid
+            days={calendar}
+            monthlyDays={calendarMonths}
+            month={month}
+            onMonthChange={(value) => { closeCalDrawer(); setMonth(value); }}
+            onDayClick={(d) => { setMonthKey(null); setDayItems(d); }}
+            onMonthClick={(m) => { setDayItems(null); setMonthKey(m); }}
+          />
+          {calDrawer && <DayEntriesPanel dayItems={calDrawer} onClose={closeCalDrawer} onDetail={setDetail} />}
         </div>
       )}
 

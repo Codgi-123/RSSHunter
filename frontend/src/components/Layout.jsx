@@ -174,7 +174,7 @@ export default function Layout({ children }) {
             </button>
           </div>
         </header>
-        <div className="page-content">
+        <div className="page-content" key={location.pathname}>
           {children}
         </div>
       </div>
