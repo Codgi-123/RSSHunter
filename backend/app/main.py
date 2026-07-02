@@ -97,8 +97,9 @@ def entries_where(filters: dict[str, Any]) -> tuple[str, list]:
     if filters.get("keyword"):
         where.append("(e.title LIKE ? OR e.summary LIKE ?)"); params += [f"%{filters['keyword']}%", f"%{filters['keyword']}%"]
     for k, col in [("vendor", "f.vendor"), ("product", "f.product"), ("db_type", "f.db_type")]:
-        if filters.get(k):
-            where.append(f"{col} = ?"); params.append(filters[k])
+        vals = [v for v in str(filters.get(k) or "").split(",") if v]  # ponytail: comma-joined multi-select values
+        if vals:
+            where.append(f"{col} IN ({','.join('?' * len(vals))})"); params += vals
     if filters.get("start"):
         where.append("e.published_at >= ?"); params.append(filters["start"])
     if filters.get("end"):
@@ -181,8 +182,9 @@ def list_feeds(keyword: str = "", vendor: str = "", product: str = "", db_type: 
     if keyword:
         where.append("(f.name LIKE ? OR f.rss_url LIKE ? OR f.vendor LIKE ? OR f.product LIKE ?)"); params += [f"%{keyword}%"] * 4
     for val, col in [(vendor, "f.vendor"), (product, "f.product"), (db_type, "f.db_type")]:
-        if val:
-            where.append(f"{col} = ?"); params.append(val)
+        vals = [v for v in val.split(",") if v]  # ponytail: comma-joined multi-select values
+        if vals:
+            where.append(f"{col} IN ({','.join('?' * len(vals))})"); params += vals
     if status == "abnormal":
         where.append("(f.status IN ('fetch_failed','parse_error') OR f.enabled=0)")
     elif status == "disabled":

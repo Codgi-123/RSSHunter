@@ -786,6 +786,8 @@ textarea { min-height: 90px; resize: vertical; }
 .recent-row-tags { display: flex; flex-wrap: wrap; gap: 5px; }
 .recent-tag { font-size: 10px; color: var(--muted); background: var(--bg-3); padding: 2px 7px; border-radius: 5px; }
 .recent-row-num { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--accent); flex: none; }
+.recent-row-side { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex: none; }
+.recent-row-time { font-family: var(--mono); font-size: 11px; color: var(--faint); }
 /* 订阅组管理：汇总条（3 列）+ 卡片网格 */
 .stat-strip.summary-3 { grid-template-columns: repeat(3, 1fr); }
 .stat-value.summary-value { font-size: 28px; margin-top: 6px; }

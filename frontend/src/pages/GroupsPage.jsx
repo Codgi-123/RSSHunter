@@ -146,11 +146,12 @@ export function GroupModal({ title, form, setForm, feeds, busy, errors = {}, onC
     const selected = form.feed_ids.includes(feed.id);
     const keyword = feedFilters.keyword.trim().toLowerCase();
     const text = `${feed.name} ${feed.vendor} ${feed.product} ${feed.db_type} ${feed.rss_url} ${tags.join(' ')}`.toLowerCase();
+    const anyMatch = (filter, test) => !filter || filter.split(',').some(test); // ponytail: multi filters are comma-joined
     return (!keyword || text.includes(keyword))
-      && (!feedFilters.vendor || feed.vendor === feedFilters.vendor)
-      && (!feedFilters.product || feed.product === feedFilters.product)
-      && (!feedFilters.db_type || feed.db_type === feedFilters.db_type)
-      && (!feedFilters.tag || tags.includes(feedFilters.tag))
+      && anyMatch(feedFilters.vendor, (v) => feed.vendor === v)
+      && anyMatch(feedFilters.product, (v) => feed.product === v)
+      && anyMatch(feedFilters.db_type, (v) => feed.db_type === v)
+      && anyMatch(feedFilters.tag, (v) => tags.includes(v))
       && (!feedFilters.status || feed.status === feedFilters.status)
       && (!feedFilters.selected || (feedFilters.selected === 'selected' ? selected : !selected));
   }), [feeds, feedFilters, form.feed_ids]);
@@ -178,10 +179,10 @@ export function GroupModal({ title, form, setForm, feeds, busy, errors = {}, onC
           {errors.feed_ids && <div className="form-error">{errors.feed_ids}</div>}
           <div className="feed-picker-toolbar">
             <ClearableInput className="feed-picker-search" value={feedFilters.keyword} onChange={(value) => updateFeedFilter('keyword', value)} placeholder="搜索名称、厂商、产品或 URL" label="订阅源搜索" icon={<Search size={16} />} />
-            <ClearableSelect value={feedFilters.vendor} onChange={(value) => updateFeedFilter('vendor', value)} label="厂商"><option value="">厂商</option>{vendors.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
-            <ClearableSelect value={feedFilters.product} onChange={(value) => updateFeedFilter('product', value)} label="产品"><option value="">产品</option>{products.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
-            <ClearableSelect value={feedFilters.db_type} onChange={(value) => updateFeedFilter('db_type', value)} label="数据库类型"><option value="">数据库类型</option>{dbTypes.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
-            <ClearableSelect value={feedFilters.tag} onChange={(value) => updateFeedFilter('tag', value)} label="标签"><option value="">标签</option>{feedTags.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
+            <ClearableSelect multiple value={feedFilters.vendor} onChange={(value) => updateFeedFilter('vendor', value)} label="厂商"><option value="">厂商</option>{vendors.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
+            <ClearableSelect multiple value={feedFilters.product} onChange={(value) => updateFeedFilter('product', value)} label="产品"><option value="">产品</option>{products.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
+            <ClearableSelect multiple value={feedFilters.db_type} onChange={(value) => updateFeedFilter('db_type', value)} label="数据库类型"><option value="">数据库类型</option>{dbTypes.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
+            <ClearableSelect multiple value={feedFilters.tag} onChange={(value) => updateFeedFilter('tag', value)} label="标签"><option value="">标签</option>{feedTags.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
             <ClearableSelect value={feedFilters.status} onChange={(value) => updateFeedFilter('status', value)} label="状态"><option value="">状态</option><option value="normal">正常</option><option value="fetch_failed">抓取失败</option><option value="parse_error">解析异常</option><option value="disabled">已停用</option></ClearableSelect>
             <ClearableSelect value={feedFilters.selected} onChange={(value) => updateFeedFilter('selected', value)} label="选择状态"><option value="">全部</option><option value="selected">已选</option><option value="unselected">未选</option></ClearableSelect>
           </div>

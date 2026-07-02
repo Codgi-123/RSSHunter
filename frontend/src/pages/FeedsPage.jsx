@@ -228,9 +228,9 @@ export default function FeedsPage() {
         <div className="toolbar" style={{ justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', flex: 1 }}>
             <ClearableInput className="filter-field" value={filters.keyword} onChange={(value) => updateFilter('keyword', value)} placeholder="搜索订阅名称、厂商、产品或 URL" label="订阅搜索" icon={<Search size={15} />} />
-            <ClearableSelect value={filters.vendor} onChange={(value) => updateFilter('vendor', value)} label="厂商"><option value="">厂商</option>{vendors.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
-            <ClearableSelect value={filters.product} onChange={(value) => updateFilter('product', value)} label="产品"><option value="">产品</option>{products.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
-            <ClearableSelect value={filters.db_type} onChange={(value) => updateFilter('db_type', value)} label="数据库类型"><option value="">类型</option>{dbTypes.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
+            <ClearableSelect multiple value={filters.vendor} onChange={(value) => updateFilter('vendor', value)} label="厂商"><option value="">厂商</option>{vendors.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
+            <ClearableSelect multiple value={filters.product} onChange={(value) => updateFilter('product', value)} label="产品"><option value="">产品</option>{products.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
+            <ClearableSelect multiple value={filters.db_type} onChange={(value) => updateFilter('db_type', value)} label="数据库类型"><option value="">类型</option>{dbTypes.map((item) => <option key={item}>{item}</option>)}</ClearableSelect>
             <ClearableSelect value={filters.status} onChange={(value) => updateFilter('status', value)} label="状态"><option value="">状态</option><option value="abnormal">异常</option><option value="normal">正常</option><option value="fetch_failed">抓取失败</option><option value="parse_error">解析异常</option><option value="disabled">已停用</option></ClearableSelect>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>

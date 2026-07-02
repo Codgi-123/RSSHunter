@@ -184,7 +184,7 @@ export default function GroupDetailPage() {
       {/* Tab: 聚合动态流 */}
       {tab === 'stream' && (
         <div className="timeline-list">
-          <EntryTimeline entries={entries.items} timeFormat="time" onDetail={setDetail} />
+          <EntryTimeline entries={entries.items} onDetail={setDetail} />
           <div className="pagination-bar" style={{ borderTop: '1px solid var(--line)', marginTop: 0 }}>
             <span className="result-count">共 {entries.total} 条</span>
             <div className="pagination-controls">

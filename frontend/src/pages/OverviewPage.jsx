@@ -221,7 +221,10 @@ export default function OverviewPage() {
                     ))}
                   </div>
                 </div>
-                <span className="recent-row-num">+{feed.today_new || 0}</span>
+                <div className="recent-row-side">
+                  <span className="recent-row-num">+{feed.today_new || 0}</span>
+                  <span className="recent-row-time">{formatShortDateTime(feed.latest_item_published_at) || '-'}</span>
+                </div>
               </a>
             ))}
             {!recentFeeds.length && <div className="state-panel">暂无最近更新订阅源</div>}
